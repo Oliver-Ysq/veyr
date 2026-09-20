@@ -64,6 +64,42 @@ export interface TaskSummary {
   skillEvidence: string[];
 }
 
+export interface SkillCatalogEntry {
+  name: string;
+  source: 'project' | 'user-agents' | 'user-codex';
+  path: string;
+  hash: string;
+  bytes: number;
+  listingEstimatedTokens: number;
+  bodyEstimatedTokens: number;
+}
+
+export interface SkillDoctorEntry extends SkillCatalogEntry {
+  explicitRequests: number;
+  lastRequestedAt?: string;
+  evidence: 'injected' | 'explicit_request' | 'unobserved';
+  injectedCount: number;
+  nativeTurnUsage?: { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number };
+  duplicateSources: string[];
+}
+
+export interface SkillDoctorSummary {
+  skills: SkillDoctorEntry[];
+  totalListingEstimatedTokens: number;
+  totalBodyEstimatedTokens: number;
+  unobservedCount: number;
+  nativeUsageStatus: 'unavailable_for_skill_attribution';
+  recommendations: string[];
+}
+
+export interface SkillRuntimeObservation {
+  name: string;
+  injectedAt: string;
+  turnId?: string;
+  bodyEstimatedTokens: number;
+  nativeTurnUsage?: { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number };
+}
+
 export interface Finding {
   id: string;
   severity: 'info' | 'warning';
@@ -186,4 +222,27 @@ export function projectTask(events: VeyrEvent[]): TaskSummary[] {
     const skillEvidence = skills.length ? skills.map((name) => `观察到显式 Skill 请求：$${name}（仅表示请求，不等于 Skill 已注入或任务已成功）。`) : ['当前 hook-only 路径未观察到可确认的显式 Skill 请求；这不代表未使用 Skill。'];
     return { sessionId, taskId, observedEvents: ordered.length, calls: list, totalEnvelopeMs, observedElapsedMs, terminalObserved, coverage: 'partial', suggestions, mcp: [...buckets.values()], skillEvidence };
   });
+}
+
+export function buildSkillDoctor(catalog: SkillCatalogEntry[], events: VeyrEvent[], runtime: SkillRuntimeObservation[] = []): SkillDoctorSummary {
+  const requests = new Map<string, { count: number; last?: string }>();
+  for (const event of events) for (const skill of event.skillNames ?? []) {
+    const current = requests.get(skill) ?? { count: 0 }; current.count += 1;
+    if (!current.last || event.occurredAt > current.last) current.last = event.occurredAt;
+    requests.set(skill, current);
+  }
+  const byName = new Map<string, SkillCatalogEntry[]>();
+  for (const skill of catalog) { const entries = byName.get(skill.name) ?? []; entries.push(skill); byName.set(skill.name, entries); }
+  const skills = catalog.map((skill) => {
+    const usage = requests.get(skill.name); const peers = byName.get(skill.name) ?? [];
+    const injections = runtime.filter((item) => item.name === skill.name);
+    const last = injections.at(-1);
+    return { ...skill, explicitRequests: usage?.count ?? 0, lastRequestedAt: last?.injectedAt ?? usage?.last, injectedCount: injections.length, nativeTurnUsage: last?.nativeTurnUsage, evidence: injections.length ? 'injected' as const : usage ? 'explicit_request' as const : 'unobserved' as const, duplicateSources: peers.filter((peer) => peer.path !== skill.path).map((peer) => peer.source) };
+  }).sort((a, b) => b.listingEstimatedTokens - a.listingEstimatedTokens || a.name.localeCompare(b.name));
+  const unused = skills.filter((skill) => skill.evidence === 'unobserved');
+  const recommendations: string[] = [];
+  if (unused.length) recommendations.push(`${unused.length} 个可见 Skill 在当前报告窗口未观察到请求或注入；优先检查 listing 成本最高的项是否应缩短 description、设为 name-only 或关闭。`);
+  if (skills.some((skill) => skill.duplicateSources.length)) recommendations.push('发现同名 Skill 来自多个根；请检查优先级和阴影关系，避免实际调用的版本与预期不一致。');
+  recommendations.push('已注入 Skill 的原生 usage 是整个 turn 的 usage，不等于该 Skill 独占 token。只有受控 A/B 才能估计边际 token 成本。');
+  return { skills, totalListingEstimatedTokens: skills.reduce((sum, skill) => sum + skill.listingEstimatedTokens, 0), totalBodyEstimatedTokens: skills.reduce((sum, skill) => sum + skill.bodyEstimatedTokens, 0), unobservedCount: unused.length, nativeUsageStatus: 'unavailable_for_skill_attribution', recommendations };
 }

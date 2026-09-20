@@ -5,9 +5,10 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite';
-import { deriveFindings, parseEvent, projectTask, type VeyrEvent } from '@veyr/core';
+import { buildSkillDoctor, deriveFindings, parseEvent, projectTask, type VeyrEvent } from '@veyr/core';
 import { renderHtmlReport, type ReportLanguage } from '@veyr/report';
 import { installHooks, normalizeCodexHook, previewInstall, probeCodex, uninstallHooks, writeSpoolItem } from '@veyr/codex-adapter';
+import { scanCodexSkillRuntime, scanSkills } from '@veyr/skill-catalog';
 
 const workspaceRoot = resolve(dirname(new URL(import.meta.url).pathname), '../../..');
 const cliPath = fileURLToPath(import.meta.url);
@@ -142,7 +143,8 @@ async function renderReport(language: ReportLanguage = 'zh-CN'): Promise<void> {
   const db = await openDatabase();
   const events = readEvents(db);
   db.close();
-  const report = { generatedAt: new Date().toISOString(), events, findings: deriveFindings(events), tasks: projectTask(events) };
+  const tasks = projectTask(events);
+  const report = { generatedAt: new Date().toISOString(), events, findings: deriveFindings(events), tasks, skillDoctor: buildSkillDoctor(await scanSkills(process.cwd()), events, await scanCodexSkillRuntime([...new Set(events.filter((event) => event.host === 'codex').map((event) => event.sessionId))])) };
   const reportDirectory = join(stateRoot, 'reports');
   await mkdir(reportDirectory, { recursive: true });
   await Promise.all([

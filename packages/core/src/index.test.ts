@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveFindings, parseEvent, projectTask } from './index.js';
+import { buildSkillDoctor, deriveFindings, parseEvent, projectTask } from './index.js';
 
 describe('core event model', () => {
   it('downgrades an unknown status instead of inventing success', () => {
@@ -61,5 +61,21 @@ describe('core event model', () => {
   it('presents explicit skill requests as bounded evidence', () => {
     const summary = projectTask([parseEvent({ id: 'skill', host: 'codex', sessionId: 's1', taskId: 't1', skillNames: ['brainstorming'], status: 'unknown', occurredAt: '2026-09-20T00:00:00.000Z', source: 'UserPromptSubmit' })])[0]!;
     expect(summary.skillEvidence[0]).toContain('$brainstorming');
+  });
+
+  it('builds a Skill Doctor with static cost, usage evidence, and unobserved candidates', () => {
+    const doctor = buildSkillDoctor([
+      { name: 'high-cost', source: 'user-codex', path: '/skills/high/SKILL.md', hash: 'a', bytes: 4000, listingEstimatedTokens: 1000, bodyEstimatedTokens: 1000 },
+      { name: 'used', source: 'project', path: '/project/.agents/skills/used/SKILL.md', hash: 'b', bytes: 400, listingEstimatedTokens: 100, bodyEstimatedTokens: 100 },
+    ], [parseEvent({ id: 'request', host: 'codex', sessionId: 's1', skillNames: ['used'], status: 'unknown', occurredAt: '2026-09-20T00:00:00.000Z', source: 'UserPromptSubmit' })]);
+    expect(doctor.totalListingEstimatedTokens).toBe(1100);
+    expect(doctor.unobservedCount).toBe(1);
+    expect(doctor.skills.find((skill) => skill.name === 'used')).toMatchObject({ explicitRequests: 1, injectedCount: 0, evidence: 'explicit_request' });
+    expect(doctor.recommendations[0]).toContain('高的项');
+  });
+
+  it('promotes rollout injection evidence above an explicit request', () => {
+    const doctor = buildSkillDoctor([{ name: 'brainstorming', source: 'user-codex', path: '/skills/brainstorming/SKILL.md', hash: 'a', bytes: 100, listingEstimatedTokens: 10, bodyEstimatedTokens: 25 }], [], [{ name: 'brainstorming', injectedAt: '2026-09-20T00:00:00Z', bodyEstimatedTokens: 25, nativeTurnUsage: { inputTokens: 1000, cacheReadTokens: 200, cacheWriteTokens: 100, outputTokens: 50 } }]);
+    expect(doctor.skills[0]).toMatchObject({ evidence: 'injected', injectedCount: 1, nativeTurnUsage: { inputTokens: 1000 } });
   });
 });

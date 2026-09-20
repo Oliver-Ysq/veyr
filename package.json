@@ -9,7 +9,7 @@
     "pnpm": ">=10"
   },
   "scripts": {
-    "build": "pnpm -r --if-present build",
+    "build": "pnpm --filter @veyr/core build && pnpm --filter @veyr/codex-adapter build && pnpm --filter @veyr/skill-catalog build && pnpm --filter @veyr/report build && pnpm --filter @veyr/cli build",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "clean": "pnpm -r --if-present clean",
     "dev": "pnpm --filter @veyr/cli dev",
