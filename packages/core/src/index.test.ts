@@ -50,6 +50,14 @@ describe('core event model', () => {
     expect(summaries[0]!.observedEvents).toBe(2);
   });
 
+  it('reports observed turn elapsed time only with explicit prompt and terminal evidence', () => {
+    const summary = projectTask([
+      parseEvent({ id: 'prompt', host: 'codex', sessionId: 's1', taskId: 't1', status: 'unknown', occurredAt: '2026-09-20T00:00:00.000Z', source: 'UserPromptSubmit' }),
+      parseEvent({ id: 'stop', host: 'codex', sessionId: 's1', taskId: 't1', status: 'unknown', occurredAt: '2026-09-20T00:00:02.500Z', source: 'Stop' }),
+    ])[0]!;
+    expect(summary).toMatchObject({ observedElapsedMs: 2500, terminalObserved: true });
+  });
+
   it('presents explicit skill requests as bounded evidence', () => {
     const summary = projectTask([parseEvent({ id: 'skill', host: 'codex', sessionId: 's1', taskId: 't1', skillNames: ['brainstorming'], status: 'unknown', occurredAt: '2026-09-20T00:00:00.000Z', source: 'UserPromptSubmit' })])[0]!;
     expect(summary.skillEvidence[0]).toContain('$brainstorming');
