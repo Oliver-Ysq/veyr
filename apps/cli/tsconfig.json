@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@veyr/core": ["packages/core/src/index.ts"],
+      "@veyr/report": ["packages/report/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

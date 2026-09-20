@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+.veyr/
+.DS_Store
+*.log
+

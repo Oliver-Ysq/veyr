@@ -1,0 +1,17 @@
+name: Bug report
+description: Report a reproducible defect without sharing sensitive trace data.
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: Include expected and actual behavior. Redact prompts, code, tokens, and credentials.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Reproduction
+      description: Include Veyr version, Node version, OS, and minimal non-sensitive steps.
+    validations:
+      required: true
+

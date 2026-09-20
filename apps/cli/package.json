@@ -1,0 +1,18 @@
+{
+  "name": "@veyr/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "veyr": "./dist/index.js" },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@veyr/core": "workspace:*",
+    "@veyr/report": "workspace:*"
+  },
+  "devDependencies": { "tsx": "^4.20.3" }
+}

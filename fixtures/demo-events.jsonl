@@ -1,0 +1,3 @@
+{"id":"fixture-001","host":"fixture","sessionId":"demo-session","taskId":"demo-task","toolName":"rg","status":"succeeded","occurredAt":"2026-09-20T00:00:01.000Z","durationMs":18,"contentBytes":1200,"source":"demo"}
+{"id":"fixture-002","host":"fixture","sessionId":"demo-session","taskId":"demo-task","toolName":"npm test","status":"failed","occurredAt":"2026-09-20T00:00:04.000Z","durationMs":2430,"contentBytes":8700,"message":"Test failed","source":"demo"}
+{"id":"fixture-003","host":"fixture","sessionId":"demo-session","taskId":"demo-task","toolName":"write_stdin","status":"unknown","occurredAt":"2026-09-20T00:00:07.000Z","contentBytes":140000,"source":"demo"}

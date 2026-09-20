@@ -1,0 +1,14 @@
+name: Feature request
+description: Propose an evidence-first improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: Problem
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Evidence and proposed approach
+      description: Explain host-specific behavior, privacy impact, and expected validation.
+
