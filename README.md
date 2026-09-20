@@ -96,6 +96,9 @@ Use Codex normally, then run `pnpm veyr report`. Check collection and privacy
 scope with `pnpm veyr status`; remove only Veyr-owned hook and trust entries
 with `pnpm veyr uninstall`.
 
+`veyr status` shows the latest report location plus observed turns, events,
+correlated calls, and pending local spool events.
+
 Live collection remains experimental. Veyr stores only bounded event metadata
 and limited outcome summaries by default; it does not retain prompts, tool
 arguments, full tool responses, or transcript paths.

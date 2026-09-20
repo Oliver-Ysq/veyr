@@ -61,7 +61,12 @@ async function status(): Promise<void> {
   const manifestPath = join(stateRoot, 'codex-install.json');
   if (!(await exists(manifestPath))) { console.log('Veyr collection is not installed. Run `veyr install` to enable experimental local Codex collection.'); return; }
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { codexHome: string; codexVersion: string; hookPath: string; entries: unknown[] };
-  console.log(`Veyr collection: installed (experimental)\nCodex: ${manifest.codexVersion}\nCodex home: ${manifest.codexHome}\nHooks: ${manifest.entries.length} Veyr-owned handlers\n\nDefault privacy: metadata and limited outcome summaries only.\nNot retained: prompts, code, command arguments, full tool output, transcript paths.`);
+  const reportPath = join(stateRoot, 'reports', 'latest.json');
+  const report = (await exists(reportPath)) ? JSON.parse(await readFile(reportPath, 'utf8')) as { tasks?: Array<{ calls?: unknown[] }>; events?: unknown[]; generatedAt?: string } : undefined;
+  const spoolPath = join(stateRoot, 'spool');
+  const pending = (await exists(spoolPath)) ? (await readdir(spoolPath)).length : 0;
+  const collection = report ? `Latest report: ${report.generatedAt ?? 'unknown'}\nObserved: ${report.tasks?.length ?? 0} turn(s), ${report.events?.length ?? 0} event(s), ${report.tasks?.reduce((total, task) => total + (task.calls?.length ?? 0), 0) ?? 0} correlated call(s)\nReport: ${join(stateRoot, 'reports', 'latest.html')}` : 'No report yet. Use Codex normally, then run `veyr report`.';
+  console.log(`Veyr collection: installed (experimental)\nCodex: ${manifest.codexVersion}\nCodex home: ${manifest.codexHome}\nHooks: ${manifest.entries.length} Veyr-owned handlers\nPending spool events: ${pending}\n${collection}\n\nDefault privacy: metadata and limited outcome summaries only.\nNot retained: prompts, code, command arguments, full tool output, transcript paths.`);
 }
 
 async function uninstall(): Promise<void> {

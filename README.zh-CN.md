@@ -91,6 +91,9 @@ pnpm veyr install
 查看采集状态与隐私范围，使用 `pnpm veyr uninstall` 只移除 Veyr 自己安装的 hook
 和 trust 条目。
 
+`veyr status` 会显示最新报告位置、已观察的 turn / 事件 / 关联调用数量，以及等待
+消费的本地 spool 事件数量。
+
 实时采集目前仍为实验性能力。默认只保存有大小限制的事件元数据和有限结果摘要；不会
 保留 prompt、工具参数、完整工具输出或 transcript 路径。
 
