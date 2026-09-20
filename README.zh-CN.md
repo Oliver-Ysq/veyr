@@ -57,6 +57,24 @@ pnpm veyr import fixtures/demo-events.jsonl
 pnpm veyr report
 ```
 
+## 实验性 Codex 实时采集
+
+当 Codex CLI 版本不低于 `0.124.0` 时，Veyr 可以为当前项目安装实验性的
+Codex hooks。安装流程不会编辑用户级 Codex 配置，也不会绕过 Codex 的 hook 信任机制。
+
+```bash
+pnpm build
+pnpm veyr doctor
+pnpm veyr install
+```
+
+随后在 Codex 中打开 `/hooks`，自行审阅并信任 Veyr hook。正常使用 Codex 后，执行
+`pnpm veyr report` 生成报告；使用 `pnpm veyr uninstall` 只移除 Veyr 自己安装的
+hook 条目。
+
+实时采集目前仍为实验性能力。默认只保存有大小限制的事件元数据和有限结果摘要；不会
+保留 prompt、工具参数、完整工具输出或 transcript 路径。
+
 ## 仓库结构
 
 ```text

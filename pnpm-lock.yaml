@@ -38,6 +38,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@veyr/codex-adapter':
+        specifier: workspace:*
+        version: link:../../packages/codex-adapter
       '@veyr/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -48,6 +51,12 @@ importers:
       tsx:
         specifier: ^4.20.3
         version: 4.23.13
+
+  packages/codex-adapter:
+    dependencies:
+      '@veyr/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/core: {}
 

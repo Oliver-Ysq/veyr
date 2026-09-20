@@ -60,6 +60,26 @@ pnpm veyr import fixtures/demo-events.jsonl
 pnpm veyr report
 ```
 
+## Experimental Codex collection
+
+Veyr can install project-local, experimental Codex hooks when Codex CLI is
+`0.124.0` or newer. The install flow never edits user-level Codex settings and
+does not bypass Codex hook trust.
+
+```bash
+pnpm build
+pnpm veyr doctor
+pnpm veyr install
+```
+
+Then open `/hooks` in Codex and explicitly review and trust the Veyr hook
+definitions. Use Codex normally, then run `pnpm veyr report`. Remove only
+Veyr-owned hook entries with `pnpm veyr uninstall`.
+
+Live collection remains experimental. Veyr stores only bounded event metadata
+and limited outcome summaries by default; it does not retain prompts, tool
+arguments, full tool responses, or transcript paths.
+
 ## Repository layout
 
 ```text

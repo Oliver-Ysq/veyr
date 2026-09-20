@@ -1,11 +1,14 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite';
 import { deriveFindings, parseEvent, type VeyrEvent } from '@veyr/core';
 import { renderHtmlReport, type ReportLanguage } from '@veyr/report';
+import { installHooks, normalizeCodexHook, probeCodex, uninstallHooks, writeSpoolItem } from '@veyr/codex-adapter';
 
 const workspaceRoot = resolve(dirname(new URL(import.meta.url).pathname), '../../..');
+const cliPath = fileURLToPath(import.meta.url);
 const stateRoot = resolve(process.env.VEYR_HOME ?? join(process.cwd(), '.veyr'));
 const dbPath = join(stateRoot, 'veyr.db');
 const require = createRequire(import.meta.url);
@@ -19,7 +22,33 @@ Usage:
   veyr import <events.jsonl> Import JSONL events into local SQLite
   veyr report [--lang <lang>] Render HTML and JSON from local SQLite (zh-CN or en)
   veyr doctor                Print local runtime and storage status
+  veyr install               Install experimental Codex hooks for this project
+  veyr uninstall             Remove Veyr hooks from this project
 `);
+}
+
+async function exists(path: string): Promise<boolean> { try { await access(path); return true; } catch { return false; } }
+
+async function doctor(project = process.cwd()): Promise<boolean> {
+  const probe = await probeCodex(project, cliPath);
+  console.log(`Veyr doctor — Codex\n\n${probe.version ? `✓ Codex CLI found: ${probe.version}` : '✗ Codex CLI was not found'}\n${probe.eligible ? '✓ Version meets stable hooks minimum: >= 0.124.0' : `✗ ${probe.reason}`}\n${probe.cliExists ? '✓ Veyr CLI build found' : '✗ Veyr CLI build is missing'}\n${probe.hookFileExists ? `• Existing project hooks: ${probe.hookPath}` : '• No project hooks.json yet'}\n\n${probe.eligible ? 'Ready for experimental project-level collection. Run: veyr install' : 'Live collection was not installed; offline import remains available.'}`);
+  return probe.eligible;
+}
+
+async function install(project = process.cwd()): Promise<void> {
+  const manifest = await installHooks(project, cliPath, stateRoot);
+  console.log(`Installed Veyr hooks in ${manifest.hookPath}. Open /hooks in Codex and explicitly trust the new Veyr definitions before they run.`);
+}
+
+async function uninstall(project = process.cwd()): Promise<void> {
+  void project; await uninstallHooks(stateRoot); console.log('Removed Veyr hook entries from the installed project configuration.');
+}
+
+async function shim(): Promise<void> {
+  const chunks: Buffer[] = []; for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+  const raw = Buffer.concat(chunks); if (raw.length > 256_000) return;
+  const payload: unknown = JSON.parse(raw.toString('utf8')); if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Hook payload must be an object.');
+  await writeSpoolItem(join(stateRoot, 'spool'), payload as Record<string, unknown>);
 }
 
 async function openDatabase(): Promise<DatabaseSyncType> {
@@ -70,6 +99,15 @@ function parseLanguage(arguments_: string[]): ReportLanguage {
 }
 
 async function renderReport(language: ReportLanguage = 'zh-CN'): Promise<void> {
+  const spool = join(stateRoot, 'spool');
+  if (await exists(spool)) {
+    for (const name of await readdir(spool)) {
+      const item = JSON.parse(await readFile(join(spool, name), 'utf8')) as { capturedAt: string; payload: Record<string, unknown> };
+      const event = normalizeCodexHook(item, name);
+      const db = await openDatabase(); db.prepare('INSERT OR REPLACE INTO events (id,host,session_id,task_id,agent_id,tool_name,status,occurred_at,duration_ms,content_bytes,message,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(event.id,event.host,event.sessionId,event.taskId ?? null,null,event.toolName ?? null,event.status,event.occurredAt,null,event.contentBytes ?? null,null,event.source); db.close();
+      await rm(join(spool, name));
+    }
+  }
   const db = await openDatabase();
   const events = readEvents(db);
   db.close();
@@ -89,7 +127,10 @@ async function main(): Promise<void> {
     case 'demo': await importFixture(join(workspaceRoot, 'fixtures', 'demo-events.jsonl')); await renderReport(parseLanguage([argument, ...options].filter((value): value is string => Boolean(value)))); break;
     case 'import': if (!argument) throw new Error('Provide a JSONL path: veyr import <events.jsonl>'); await importFixture(resolve(argument)); break;
     case 'report': await renderReport(parseLanguage([argument, ...options].filter((value): value is string => Boolean(value)))); break;
-    case 'doctor': console.log(JSON.stringify({ node: process.version, stateRoot, database: dbPath, mode: 'offline-fixture-only' }, null, 2)); break;
+    case 'doctor': await doctor(); break;
+    case 'install': await install(); break;
+    case 'uninstall': await uninstall(); break;
+    case 'shim': await shim(); break;
     case '--help': case '-h': case undefined: usage(); break;
     default: throw new Error(`Unknown command: ${command}`);
   }

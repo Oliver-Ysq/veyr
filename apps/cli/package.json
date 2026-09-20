@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@veyr/core": "workspace:*",
+    "@veyr/codex-adapter": "workspace:*",
     "@veyr/report": "workspace:*"
   },
   "devDependencies": { "tsx": "^4.20.3" }

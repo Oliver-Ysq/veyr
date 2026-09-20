@@ -4,6 +4,7 @@
     "baseUrl": "../..",
     "paths": {
       "@veyr/core": ["packages/core/src/index.ts"],
+      "@veyr/codex-adapter": ["packages/codex-adapter/src/index.ts"],
       "@veyr/report": ["packages/report/src/index.ts"]
     }
   },
