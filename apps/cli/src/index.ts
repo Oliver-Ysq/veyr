@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite';
 import { deriveFindings, parseEvent, type VeyrEvent } from '@veyr/core';
-import { renderHtmlReport } from '@veyr/report';
+import { renderHtmlReport, type ReportLanguage } from '@veyr/report';
 
 const workspaceRoot = resolve(dirname(new URL(import.meta.url).pathname), '../../..');
 const stateRoot = resolve(process.env.VEYR_HOME ?? join(process.cwd(), '.veyr'));
@@ -15,9 +15,9 @@ function usage(): void {
   console.log(`Veyr — local evidence reports for coding-agent events
 
 Usage:
-  veyr demo                  Import the included offline fixture and render a report
+  veyr demo [--lang <lang>]  Import the included fixture and render a report (default: zh-CN)
   veyr import <events.jsonl> Import JSONL events into local SQLite
-  veyr report                Render HTML and JSON from local SQLite
+  veyr report [--lang <lang>] Render HTML and JSON from local SQLite (zh-CN or en)
   veyr doctor                Print local runtime and storage status
 `);
 }
@@ -62,7 +62,14 @@ function readEvents(db: DatabaseSyncType): VeyrEvent[] {
   }));
 }
 
-async function renderReport(): Promise<void> {
+function parseLanguage(arguments_: string[]): ReportLanguage {
+  const languageIndex = arguments_.indexOf('--lang');
+  const language = languageIndex === -1 ? 'zh-CN' : arguments_[languageIndex + 1];
+  if (language !== 'zh-CN' && language !== 'en') throw new Error('Unsupported language. Use --lang zh-CN or --lang en.');
+  return language;
+}
+
+async function renderReport(language: ReportLanguage = 'zh-CN'): Promise<void> {
   const db = await openDatabase();
   const events = readEvents(db);
   db.close();
@@ -71,17 +78,17 @@ async function renderReport(): Promise<void> {
   await mkdir(reportDirectory, { recursive: true });
   await Promise.all([
     writeFile(join(reportDirectory, 'latest.json'), `${JSON.stringify(report, null, 2)}\n`),
-    writeFile(join(reportDirectory, 'latest.html'), renderHtmlReport(report)),
+    writeFile(join(reportDirectory, 'latest.html'), renderHtmlReport(report, language)),
   ]);
-  console.log(`Wrote ${join(reportDirectory, 'latest.html')} and latest.json`);
+  console.log(`Wrote ${join(reportDirectory, 'latest.html')} and latest.json (${language})`);
 }
 
 async function main(): Promise<void> {
-  const [command, argument] = process.argv.slice(2);
+  const [command, argument, ...options] = process.argv.slice(2);
   switch (command) {
-    case 'demo': await importFixture(join(workspaceRoot, 'fixtures', 'demo-events.jsonl')); await renderReport(); break;
+    case 'demo': await importFixture(join(workspaceRoot, 'fixtures', 'demo-events.jsonl')); await renderReport(parseLanguage([argument, ...options].filter((value): value is string => Boolean(value)))); break;
     case 'import': if (!argument) throw new Error('Provide a JSONL path: veyr import <events.jsonl>'); await importFixture(resolve(argument)); break;
-    case 'report': await renderReport(); break;
+    case 'report': await renderReport(parseLanguage([argument, ...options].filter((value): value is string => Boolean(value)))); break;
     case 'doctor': console.log(JSON.stringify({ node: process.version, stateRoot, database: dbPath, mode: 'offline-fixture-only' }, null, 2)); break;
     case '--help': case '-h': case undefined: usage(); break;
     default: throw new Error(`Unknown command: ${command}`);

@@ -47,6 +47,12 @@ pnpm veyr demo
 The demo writes a local database and report under `.veyr/` in the current
 directory. Open `.veyr/reports/latest.html` in a browser.
 
+HTML reports are Chinese (`zh-CN`) by default. Generate an English report with:
+
+```bash
+pnpm veyr report --lang en
+```
+
 You can also import your own JSONL fixture:
 
 ```bash

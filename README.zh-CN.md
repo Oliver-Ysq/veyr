@@ -44,6 +44,12 @@ pnpm veyr demo
 演示会在当前目录的 `.veyr/` 下写入本地数据库和报告。使用浏览器打开
 `.veyr/reports/latest.html` 即可查看报告。
 
+HTML 报告默认使用简体中文（`zh-CN`）。如需生成英文报告，可执行：
+
+```bash
+pnpm veyr report --lang en
+```
+
 也可以导入自己的 JSONL fixture：
 
 ```bash
