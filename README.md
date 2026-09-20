@@ -2,6 +2,8 @@
 
 > Evidence-first observability for coding agents.
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Veyr is a local-first diagnostic tool for coding-agent runs. It turns structured
 events into a local SQLite evidence store and human-readable HTML/JSON reports.
 The initial MVP targets Codex and TraeX, but this repository currently ships an
@@ -64,8 +66,9 @@ docs/              Architecture, privacy, and support-scope documentation
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md),
-and [SECURITY.md](SECURITY.md) before participating.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md),
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md) before
+participating.
 
 ## License
 
