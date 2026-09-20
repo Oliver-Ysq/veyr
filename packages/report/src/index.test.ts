@@ -48,6 +48,6 @@ describe('HTML report languages', () => {
     const html = renderHtmlReport({ generatedAt: '2026-09-20T00:00:00.000Z', events: [], findings: [], tasks: [], skillDoctor: { totalListingEstimatedTokens: 90, totalBodyEstimatedTokens: 900, unobservedCount: 1, nativeUsageStatus: 'unavailable_for_skill_attribution', recommendations: ['1 个可见 Skill 在当前报告窗口未观察到明确请求。'], skills: [{ name: 'unused-skill', source: 'user-codex', path: '/skills/unused/SKILL.md', hash: 'a', bytes: 3600, listingEstimatedTokens: 90, bodyEstimatedTokens: 900, explicitRequests: 0, injectedCount: 0, evidence: 'unobserved', duplicateSources: [] }] } });
     expect(html).toContain('Skill Doctor');
     expect(html).toContain('unused-skill');
-    expect(html).toContain('90 est.');
+    expect(html).toContain('约 90 tokens');
   });
 });
