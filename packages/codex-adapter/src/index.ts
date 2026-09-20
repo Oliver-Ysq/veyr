@@ -225,5 +225,5 @@ export function normalizeCodexHook(item: SpoolItem, sourceId: string): VeyrEvent
     if (exitCode === 0) status = 'succeeded'; else if (typeof exitCode === 'number') status = 'failed';
     if (object.error !== undefined || object.is_error === true) status = 'failed';
   }
-  return { id: `codex-${sourceId}`, host: 'codex', sessionId: text(payload.session_id) ?? 'unknown', taskId: text(payload.turn_id), agentId: undefined, toolName: tool, status, occurredAt: item.capturedAt, contentBytes: Buffer.byteLength(JSON.stringify(payload)), source: hook };
+  return { id: `codex-${sourceId}`, host: 'codex', sessionId: text(payload.session_id) ?? 'unknown', taskId: text(payload.turn_id), agentId: undefined, toolName: tool, callId: text(payload.tool_use_id), status, occurredAt: item.capturedAt, contentBytes: Buffer.byteLength(JSON.stringify(payload)), source: hook };
 }

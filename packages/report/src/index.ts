@@ -1,67 +1,27 @@
-import type { Finding, VeyrEvent } from '@veyr/core';
+import type { Finding, McpSummary, TaskSummary, ToolCall, VeyrEvent } from '@veyr/core';
 
-export interface ReportData {
-  generatedAt: string;
-  events: VeyrEvent[];
-  findings: Finding[];
-}
-
+export interface ReportData { generatedAt: string; events: VeyrEvent[]; findings: Finding[]; tasks: TaskSummary[]; }
 export type ReportLanguage = 'zh-CN' | 'en';
 
 const copy = {
-  'zh-CN': {
-    title: 'Veyr 本地证据报告',
-    generated: '生成时间',
-    events: '条事件',
-    findings: '条发现',
-    findingsTitle: '诊断发现',
-    noFindings: '没有规则发现',
-    noFindingsDetail: '当前已实现的规则均未触发。',
-    evidence: '证据',
-    observedEvents: '观测事件',
-    time: '时间', host: '宿主', tool: '工具', status: '状态', duration: '耗时（毫秒）', bytes: '观测内容字节数',
-    boundaryTitle: '解释边界',
-    boundary: '观察到不等于执行成功；相关不等于因果；数据缺失时保持未知。',
-    failedTitle: '发现失败的工具调用',
-    failedSummary: (count: number) => `有 ${count} 次调用以失败状态结束。请在推断根因前检查宿主专属的结果证据。`,
-    unknownTitle: '结果证据不完整',
-    unknownSummary: (count: number) => `有 ${count} 条事件缺少可靠的规范化结果，因此保持为未知状态。`,
-    largeTitle: '观测到较大内容',
-    largeSummary: (count: number) => `有 ${count} 条事件的观测内容至少为 100 KB。这是观测事实，不等于上下文压力的证明。`,
-  },
-  en: {
-    title: 'Veyr local evidence report',
-    generated: 'Generated', events: 'event(s)', findings: 'finding(s)',
-    findingsTitle: 'Findings', noFindings: 'No rule findings', noFindingsDetail: 'No currently implemented rule was triggered.',
-    evidence: 'Evidence', observedEvents: 'Observed events', time: 'Time', host: 'Host', tool: 'Tool', status: 'Status', duration: 'Duration (ms)', bytes: 'Observed bytes',
-    boundaryTitle: 'Interpretation boundary', boundary: 'Observation is not success. Correlation is not causation. Missing data remains unknown.',
-    failedTitle: 'Failed tool calls observed', failedSummary: (count: number) => `${count} call(s) ended in a reported failed state. Review host-specific outcome evidence before inferring root cause.`,
-    unknownTitle: 'Incomplete outcome evidence', unknownSummary: (count: number) => `${count} event(s) lack a reliable normalized outcome and remain unknown.`,
-    largeTitle: 'Large observed content', largeSummary: (count: number) => `${count} event(s) contain at least 100 KB of observed content. This is an observation, not proof of context pressure.`,
-  },
+  'zh-CN': { title: 'Veyr 本地证据报告', generated: '生成时间', events: '条原始事件', overview: '本次摘要', partial: '部分覆盖', calls: '次关联调用', envelope: '可测调用包络', conclusion: '本次结论', suggestions: '建议下一步', timeline: '工具调用时间线', mcp: '观察到的 MCP 调用', skill: 'Skill 证据', evidence: '原始证据', noCalls: '本次未观察到可关联的工具调用。', noMcp: '本次未观察到规范 MCP 名称的调用。', time: '开始时间', tool: '工具', result: '结果', duration: '调用包络耗时', source: '测量来源', evidenceCount: '证据事件', unknown: '结果未知', knownSuccess: '已知成功', knownFailure: '已知失败', hookEnvelope: 'Codex hook 时间戳', unavailable: '不可测', mcpColumns: ['MCP Server', '工具', '调用数', '已知成功', '已知失败', '未知', '包络耗时'] as const, boundaryTitle: '解释边界', boundary: '调用包络耗时包含 hook 调度与本地开销，不等同于服务端执行耗时。观察到不等于执行成功；相关不等于因果；数据缺失时保持未知。', skillEvidence: '当前 hook-only 路径未观察到可确认的 Skill 请求；这不代表未使用 Skill。' },
+  en: { title: 'Veyr local evidence report', generated: 'Generated', events: 'raw event(s)', overview: 'Run summary', partial: 'partial coverage', calls: 'correlated call(s)', envelope: 'measured call envelope', conclusion: 'What happened', suggestions: 'Recommended next steps', timeline: 'Tool-call timeline', mcp: 'Observed MCP calls', skill: 'Skill evidence', evidence: 'Raw evidence', noCalls: 'No correlatable tool calls were observed.', noMcp: 'No calls with canonical MCP names were observed.', time: 'Started', tool: 'Tool', result: 'Outcome', duration: 'Call envelope', source: 'Measurement source', evidenceCount: 'Evidence events', unknown: 'Outcome unknown', knownSuccess: 'Known success', knownFailure: 'Known failure', hookEnvelope: 'Codex hook timestamps', unavailable: 'Unavailable', mcpColumns: ['MCP server', 'Tool', 'Calls', 'Known success', 'Known failure', 'Unknown', 'Envelope'] as const, boundaryTitle: 'Interpretation boundary', boundary: 'Call envelope time includes hook scheduling and local overhead; it is not server execution time. Observation is not success. Correlation is not causation. Missing data remains unknown.', skillEvidence: 'The hook-only path did not observe a confirmable Skill request. This does not mean no Skill was used.' },
 } as const;
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
-}
+function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character); }
+function formatMs(value: number | undefined, language: ReportLanguage): string { return value === undefined ? copy[language].unavailable : `${value} ms`; }
+function resultLabel(call: ToolCall, language: ReportLanguage): string { return call.status === 'succeeded' ? copy[language].knownSuccess : call.status === 'failed' ? copy[language].knownFailure : copy[language].unknown; }
 
-function localizedFinding(finding: Finding, language: ReportLanguage): Pick<Finding, 'title' | 'summary'> {
+function taskHtml(task: TaskSummary, language: ReportLanguage): string {
   const text = copy[language];
-  const count = finding.eventIds.length;
-  if (finding.id === 'failed-calls') return { title: text.failedTitle, summary: text.failedSummary(count) };
-  if (finding.id === 'unknown-outcomes') return { title: text.unknownTitle, summary: text.unknownSummary(count) };
-  if (finding.id === 'large-observed-content') return { title: text.largeTitle, summary: text.largeSummary(count) };
-  return finding;
+  const calls = task.calls.length ? task.calls.map((call) => `<tr><td>${escapeHtml(call.startedAt ?? call.completedAt ?? '—')}</td><td><code>${escapeHtml(call.toolName)}</code></td><td>${resultLabel(call, language)}</td><td>${formatMs(call.durationMs, language)}</td><td>${call.durationSource === 'hook_envelope' ? text.hookEnvelope : text.unavailable}</td><td>${call.evidenceIds.length}</td></tr>`).join('') : `<tr><td colspan="6">${text.noCalls}</td></tr>`;
+  const mcp = task.mcp.length ? task.mcp.map((entry: McpSummary) => `<tr><td>${escapeHtml(entry.server)}</td><td>${escapeHtml(entry.tool)}</td><td>${entry.calls}</td><td>${entry.knownSucceeded}</td><td>${entry.knownFailed}</td><td>${entry.unknown}</td><td>${formatMs(entry.totalEnvelopeMs || undefined, language)}</td></tr>`).join('') : `<tr><td colspan="7">${text.noMcp}</td></tr>`;
+  const conclusion = task.calls.length ? `${task.calls.length} ${text.calls} ${language === 'zh-CN' ? '已由 PreToolUse / PostToolUse 关联。' : 'were correlated from PreToolUse / PostToolUse.'}` : text.noCalls;
+  return `<section class="hero"><div><span class="badge">${text.partial}</span><h2>${text.overview}</h2><p>${task.observedEvents} ${text.events} · ${task.calls.length} ${text.calls} · ${text.envelope}: ${formatMs(task.totalEnvelopeMs || undefined, language)}</p></div><div class="session">session<br/><code>${escapeHtml(task.sessionId)}</code></div></section><section><h2>${text.conclusion}</h2><p>${conclusion}</p><h3>${text.suggestions}</h3><ol>${task.suggestions.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ol></section><section><h2>${text.timeline}</h2><table><thead><tr><th>${text.time}</th><th>${text.tool}</th><th>${text.result}</th><th>${text.duration}</th><th>${text.source}</th><th>${text.evidenceCount}</th></tr></thead><tbody>${calls}</tbody></table></section><section><h2>${text.mcp}</h2><table><thead><tr>${text.mcpColumns.map((column) => `<th>${column}</th>`).join('')}</tr></thead><tbody>${mcp}</tbody></table></section><section><h2>${text.skill}</h2><p>${text.skillEvidence}</p></section>`;
 }
 
 export function renderHtmlReport(report: ReportData, language: ReportLanguage = 'zh-CN'): string {
-  const text = copy[language];
-  const findings = report.findings.length
-    ? report.findings.map((finding) => {
-      const localized = localizedFinding(finding, language);
-      return `<li class="${finding.severity}"><strong>${escapeHtml(localized.title)}</strong><p>${escapeHtml(localized.summary)}</p><small>${text.evidence}: ${finding.eventIds.map(escapeHtml).join(', ')}</small></li>`;
-    }).join('\n')
-    : `<li class="info"><strong>${text.noFindings}</strong><p>${text.noFindingsDetail}</p></li>`;
-  const rows = report.events.map((event) => `<tr><td>${escapeHtml(event.occurredAt)}</td><td>${escapeHtml(event.host)}</td><td>${escapeHtml(event.toolName ?? '—')}</td><td>${escapeHtml(event.status)}</td><td>${event.durationMs ?? '—'}</td><td>${event.contentBytes ?? '—'}</td></tr>`).join('\n');
-  return `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${text.title}</title><style>body{font-family:ui-sans-serif,system-ui;max-width:1100px;margin:40px auto;padding:0 20px;background:#0b1020;color:#e5e7eb}h1{color:#a5b4fc}section{background:#131a2e;border:1px solid #26314f;border-radius:12px;padding:20px;margin:18px 0}li{margin:12px 0;padding:12px;border-radius:8px;list-style:none}.warning{background:#422006}.info{background:#172554}p{margin:.4rem 0;color:#cbd5e1}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;border-bottom:1px solid #26314f;padding:10px}th{color:#a5b4fc}small{color:#94a3b8}</style></head><body><h1>${text.title}</h1><p>${text.generated} ${escapeHtml(report.generatedAt)} · ${report.events.length} ${text.events} · ${report.findings.length} ${text.findings}</p><section><h2>${text.findingsTitle}</h2><ul>${findings}</ul></section><section><h2>${text.observedEvents}</h2><table><thead><tr><th>${text.time}</th><th>${text.host}</th><th>${text.tool}</th><th>${text.status}</th><th>${text.duration}</th><th>${text.bytes}</th></tr></thead><tbody>${rows}</tbody></table></section><section><h2>${text.boundaryTitle}</h2><p>${text.boundary}</p></section></body></html>`;
+  const text = copy[language]; const tasks = report.tasks.length ? report.tasks.map((task) => taskHtml(task, language)).join('') : `<section><h2>${text.overview}</h2><p>${text.noCalls}</p></section>`;
+  const raw = report.events.map((event) => `<tr><td>${escapeHtml(event.occurredAt)}</td><td>${escapeHtml(event.source)}</td><td>${escapeHtml(event.toolName ?? '—')}</td><td>${escapeHtml(event.callId ?? '—')}</td><td>${escapeHtml(event.status)}</td></tr>`).join('');
+  return `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${text.title}</title><style>:root{color-scheme:dark}body{font-family:ui-sans-serif,system-ui;max-width:1180px;margin:36px auto;padding:0 22px;background:#080d1d;color:#e5e7eb}h1{font-size:38px;color:#a5b4fc;margin-bottom:8px}h2{font-size:25px;margin:0 0 14px}h3{font-size:16px;color:#c7d2fe;margin:20px 0 8px}p,li{color:#cbd5e1;line-height:1.6}section{background:#111a31;border:1px solid #263a61;border-radius:16px;padding:24px;margin:18px 0}.hero{display:flex;justify-content:space-between;gap:24px;border-color:#354b7d;background:linear-gradient(135deg,#132147,#10182b)}.badge{display:inline-block;border:1px solid #5372bf;color:#bfdbfe;border-radius:99px;padding:3px 9px;font-size:12px;margin-bottom:10px}.session{font-size:12px;color:#94a3b8;text-align:right;overflow-wrap:anywhere}code{color:#c4b5fd}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;border-bottom:1px solid #263a61;padding:11px 9px;vertical-align:top}th{color:#a5b4fc;font-weight:650}ol{padding-left:20px}details{margin:18px 0;background:#0d1528;border-radius:12px;padding:4px 18px}summary{cursor:pointer;padding:14px 0;color:#c7d2fe;font-weight:650}.muted{color:#94a3b8}@media(max-width:700px){.hero{display:block}.session{text-align:left;margin-top:16px}table{font-size:12px;display:block;overflow-x:auto}}</style></head><body><h1>${text.title}</h1><p class="muted">${text.generated} ${escapeHtml(report.generatedAt)} · ${report.events.length} ${text.events}</p>${tasks}<details><summary>${text.evidence}</summary><table><thead><tr><th>${text.time}</th><th>Event</th><th>${text.tool}</th><th>Call ID</th><th>${text.result}</th></tr></thead><tbody>${raw}</tbody></table></details><section><h2>${text.boundaryTitle}</h2><p>${text.boundary}</p></section></body></html>`;
 }

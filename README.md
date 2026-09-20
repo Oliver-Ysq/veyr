@@ -93,6 +93,12 @@ Live collection remains experimental. Veyr stores only bounded event metadata
 and limited outcome summaries by default; it does not retain prompts, tool
 arguments, full tool responses, or transcript paths.
 
+Reports lead with a human-readable run summary, correlated tool-call envelopes,
+next-step suggestions, observed MCP calls, and Skill evidence boundaries. A
+call envelope is measured between Codex hook timestamps; it is not presented as
+server execution time. Skill use is evidence-graded: no observed Skill evidence
+does not mean a Skill was not used.
+
 ## Repository layout
 
 ```text
