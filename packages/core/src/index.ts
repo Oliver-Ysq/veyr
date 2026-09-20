@@ -53,6 +53,8 @@ export interface McpSummary {
 export interface TaskSummary {
   sessionId: string;
   taskId?: string;
+  /** Last hook timestamp observed for this turn. Used only for report ordering. */
+  lastObservedAt: string;
   observedEvents: number;
   calls: ToolCall[];
   totalEnvelopeMs: number;
@@ -62,6 +64,19 @@ export interface TaskSummary {
   suggestions: string[];
   mcp: McpSummary[];
   skillEvidence: string[];
+}
+
+/** A report-facing projection: one coding session containing one or more turns. */
+export interface SessionSummary {
+  sessionId: string;
+  turns: TaskSummary[];
+  observedEvents: number;
+  calls: ToolCall[];
+  totalEnvelopeMs: number;
+  lastObservedAt: string;
+  terminalObserved: boolean;
+  mcp: McpSummary[];
+  suggestions: string[];
 }
 
 export interface SkillCatalogEntry {
@@ -220,8 +235,39 @@ export function projectTask(events: VeyrEvent[]): TaskSummary[] {
     if (list.length && totalEnvelopeMs > 0) suggestions.push('当前仅有 1 次调用样本，尚不能判断耗时是否异常；继续采集同类任务后才可建立基线。');
     const skills = [...new Set(ordered.flatMap((event) => event.skillNames ?? []))];
     const skillEvidence = skills.length ? skills.map((name) => `观察到显式 Skill 请求：$${name}（仅表示请求，不等于 Skill 已注入或任务已成功）。`) : ['当前 hook-only 路径未观察到可确认的显式 Skill 请求；这不代表未使用 Skill。'];
-    return { sessionId, taskId, observedEvents: ordered.length, calls: list, totalEnvelopeMs, observedElapsedMs, terminalObserved, coverage: 'partial', suggestions, mcp: [...buckets.values()], skillEvidence };
+    return { sessionId, taskId, lastObservedAt: ordered.at(-1)!.occurredAt, observedEvents: ordered.length, calls: list, totalEnvelopeMs, observedElapsedMs, terminalObserved, coverage: 'partial', suggestions, mcp: [...buckets.values()], skillEvidence };
   });
+}
+
+export function projectSessions(tasks: TaskSummary[]): SessionSummary[] {
+  const grouped = new Map<string, TaskSummary[]>();
+  for (const task of tasks) {
+    const turns = grouped.get(task.sessionId) ?? [];
+    turns.push(task);
+    grouped.set(task.sessionId, turns);
+  }
+  return [...grouped.entries()].map(([sessionId, turns]) => {
+    const orderedTurns = [...turns].sort((left, right) => right.lastObservedAt.localeCompare(left.lastObservedAt));
+    const calls = orderedTurns.flatMap((turn) => turn.calls);
+    const mcpByName = new Map<string, McpSummary>();
+    for (const turn of orderedTurns) for (const entry of turn.mcp) {
+      const key = `${entry.server}:${entry.tool}`;
+      const current = mcpByName.get(key) ?? { ...entry, calls: 0, knownSucceeded: 0, knownFailed: 0, unknown: 0, totalEnvelopeMs: 0 };
+      current.calls += entry.calls; current.knownSucceeded += entry.knownSucceeded; current.knownFailed += entry.knownFailed; current.unknown += entry.unknown; current.totalEnvelopeMs += entry.totalEnvelopeMs;
+      mcpByName.set(key, current);
+    }
+    return {
+      sessionId,
+      turns: orderedTurns,
+      observedEvents: orderedTurns.reduce((sum, turn) => sum + turn.observedEvents, 0),
+      calls,
+      totalEnvelopeMs: calls.reduce((sum, call) => sum + (call.durationMs ?? 0), 0),
+      lastObservedAt: orderedTurns[0]!.lastObservedAt,
+      terminalObserved: orderedTurns.some((turn) => turn.terminalObserved),
+      mcp: [...mcpByName.values()],
+      suggestions: [...new Set(orderedTurns.flatMap((turn) => turn.suggestions))],
+    };
+  }).sort((left, right) => right.lastObservedAt.localeCompare(left.lastObservedAt));
 }
 
 export function buildSkillDoctor(catalog: SkillCatalogEntry[], events: VeyrEvent[], runtime: SkillRuntimeObservation[] = []): SkillDoctorSummary {

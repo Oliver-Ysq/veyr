@@ -27,12 +27,21 @@ describe('HTML report languages', () => {
   it('renders a task summary, call envelope, MCP view, and skill evidence', () => {
     const html = renderHtmlReport({
       generatedAt: '2026-09-20T00:00:00.000Z', events: [], findings: [], skillDoctor: { skills: [{ name: 'brainstorming', source: 'user-codex', path: '/skills/brainstorming/SKILL.md', hash: 'a', bytes: 200, listingEstimatedTokens: 20, bodyEstimatedTokens: 50, explicitRequests: 1, injectedCount: 1, evidence: 'injected', nativeTurnUsage: { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 10 }, duplicateSources: [] }], totalListingEstimatedTokens: 20, totalBodyEstimatedTokens: 50, unobservedCount: 0, nativeUsageStatus: 'unavailable_for_skill_attribution' as const, recommendations: [] },
-      tasks: [{ sessionId: 's1', taskId: 't1', observedEvents: 4, totalEnvelopeMs: 370, observedElapsedMs: 800, terminalObserved: true, coverage: 'partial', suggestions: ['结果缺少结构化证据。'], skillEvidence: ['观察到显式 Skill 请求：$brainstorming。'], calls: [{ id: 'c1', sessionId: 's1', taskId: 't1', toolName: 'mcp__filesystem__read_file', startedAt: '2026-09-20T00:00:00.000Z', completedAt: '2026-09-20T00:00:00.370Z', durationMs: 370, durationSource: 'hook_envelope', status: 'succeeded', evidenceIds: ['pre', 'post'], outcomeEvidence: 'native_exit_code' }], mcp: [{ server: 'filesystem', tool: 'read_file', calls: 1, knownSucceeded: 1, knownFailed: 0, unknown: 0, totalEnvelopeMs: 370 }] }],
+      tasks: [{ sessionId: 's1', taskId: 't1', lastObservedAt: '2026-09-20T00:00:00.370Z', observedEvents: 4, totalEnvelopeMs: 370, observedElapsedMs: 800, terminalObserved: true, coverage: 'partial', suggestions: ['结果缺少结构化证据。'], skillEvidence: ['观察到显式 Skill 请求：$brainstorming。'], calls: [{ id: 'c1', sessionId: 's1', taskId: 't1', toolName: 'mcp__filesystem__read_file', startedAt: '2026-09-20T00:00:00.000Z', completedAt: '2026-09-20T00:00:00.370Z', durationMs: 370, durationSource: 'hook_envelope', status: 'succeeded', evidenceIds: ['pre', 'post'], outcomeEvidence: 'native_exit_code' }], mcp: [{ server: 'filesystem', tool: 'read_file', calls: 1, knownSucceeded: 1, knownFailed: 0, unknown: 0, totalEnvelopeMs: 370 }] }],
     });
     expect(html).toContain('370 ms');
     expect(html).toContain('filesystem');
     expect(html).toContain('brainstorming');
     expect(html).toContain('工具调用时间线');
+  });
+
+  it('uses one visible summary for the newest session and collapses historical sessions', () => {
+    const task = (sessionId: string, taskId: string, lastObservedAt: string) => ({ sessionId, taskId, lastObservedAt, observedEvents: 1, totalEnvelopeMs: 0, terminalObserved: false, coverage: 'partial' as const, suggestions: [], skillEvidence: [], calls: [], mcp: [] });
+    const html = renderHtmlReport({ ...report, tasks: [task('older', 't1', '2026-09-20T00:00:00.000Z'), task('newer', 't1', '2026-09-20T00:00:02.000Z'), task('newer', 't2', '2026-09-20T00:00:01.000Z')] });
+    expect(html.match(/<h2>本次摘要<\/h2>/g)).toHaveLength(1);
+    expect(html).toContain('历史会话（1 会话）');
+    expect(html).toContain('<code>older</code> · 1 个观测 turn');
+    expect(html.indexOf('<code>newer</code>')).toBeLessThan(html.indexOf('<code>older</code>'));
   });
 
   it('renders Skill Doctor static cost and unobserved candidates in the main report', () => {

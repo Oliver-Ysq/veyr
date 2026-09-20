@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSkillDoctor, deriveFindings, parseEvent, projectTask } from './index.js';
+import { buildSkillDoctor, deriveFindings, parseEvent, projectSessions, projectTask } from './index.js';
 
 describe('core event model', () => {
   it('downgrades an unknown status instead of inventing success', () => {
@@ -56,6 +56,19 @@ describe('core event model', () => {
       parseEvent({ id: 'stop', host: 'codex', sessionId: 's1', taskId: 't1', status: 'unknown', occurredAt: '2026-09-20T00:00:02.500Z', source: 'Stop' }),
     ])[0]!;
     expect(summary).toMatchObject({ observedElapsedMs: 2500, terminalObserved: true });
+  });
+
+  it('groups turns by session and orders sessions by their latest observed event', () => {
+    const tasks = projectTask([
+      parseEvent({ id: 'old-turn', host: 'codex', sessionId: 'old', taskId: 't1', status: 'unknown', occurredAt: '2026-09-20T00:00:00.000Z', source: 'SessionStart' }),
+      parseEvent({ id: 'new-turn-1', host: 'codex', sessionId: 'new', taskId: 't1', status: 'unknown', occurredAt: '2026-09-20T00:00:01.000Z', source: 'SessionStart' }),
+      parseEvent({ id: 'new-turn-2', host: 'codex', sessionId: 'new', taskId: 't2', status: 'unknown', occurredAt: '2026-09-20T00:00:02.000Z', source: 'Stop' }),
+    ]);
+    const sessions = projectSessions(tasks);
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0]).toMatchObject({ sessionId: 'new', lastObservedAt: '2026-09-20T00:00:02.000Z' });
+    expect(sessions[0]!.turns).toHaveLength(2);
+    expect(sessions[1]!.sessionId).toBe('old');
   });
 
   it('presents explicit skill requests as bounded evidence', () => {
