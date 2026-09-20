@@ -62,19 +62,20 @@ pnpm veyr report
 
 ## Experimental Codex collection
 
-Veyr can install project-local, experimental Codex hooks when Codex CLI is
-`0.124.0` or newer. The install flow never edits user-level Codex settings and
-does not bypass Codex hook trust.
+Veyr can install experimental, user-level Codex collection when Codex CLI is
+`0.124.0` or newer. `veyr install` presents a precise change preview and asks
+for one explicit confirmation. After that confirmation, it installs only
+Veyr-owned hooks and their exact trust hashes, so users do not need a separate
+Desktop or CLI configuration step.
 
 ```bash
 pnpm build
-pnpm veyr doctor
 pnpm veyr install
 ```
 
-Then open `/hooks` in Codex and explicitly review and trust the Veyr hook
-definitions. Use Codex normally, then run `pnpm veyr report`. Remove only
-Veyr-owned hook entries with `pnpm veyr uninstall`.
+Use Codex normally, then run `pnpm veyr report`. Check collection and privacy
+scope with `pnpm veyr status`; remove only Veyr-owned hook and trust entries
+with `pnpm veyr uninstall`.
 
 Live collection remains experimental. Veyr stores only bounded event metadata
 and limited outcome summaries by default; it does not retain prompts, tool
