@@ -39,7 +39,6 @@ Requires Node.js 22.5+ and pnpm 10+.
 ```bash
 pnpm install
 pnpm build
-pnpm build
 pnpm veyr demo
 ```
 
