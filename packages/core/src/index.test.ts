@@ -49,4 +49,9 @@ describe('core event model', () => {
     expect(summaries).toHaveLength(1);
     expect(summaries[0]!.observedEvents).toBe(2);
   });
+
+  it('presents explicit skill requests as bounded evidence', () => {
+    const summary = projectTask([parseEvent({ id: 'skill', host: 'codex', sessionId: 's1', taskId: 't1', skillNames: ['brainstorming'], status: 'unknown', occurredAt: '2026-09-20T00:00:00.000Z', source: 'UserPromptSubmit' })])[0]!;
+    expect(summary.skillEvidence[0]).toContain('$brainstorming');
+  });
 });

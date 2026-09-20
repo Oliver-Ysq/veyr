@@ -65,6 +65,11 @@ describe('spool and normalization', () => {
     expect(redacted).toEqual({ session_id: 'session', hook_event_name: 'PostToolUse', tool_response: { exit_code: 1 } });
   });
 
+  it('keeps explicit skill names without retaining the prompt', () => {
+    const redacted = redactCodexPayload({ session_id: 'session', hook_event_name: 'UserPromptSubmit', prompt: 'Use $brainstorming and $test-runner; do not retain this sentence.' });
+    expect(redacted).toEqual({ session_id: 'session', hook_event_name: 'UserPromptSubmit', skill_names: ['brainstorming', 'test-runner'] });
+  });
+
   it('uses a native exit code when present', () => {
     const failed = normalizeCodexHook({ capturedAt: '2026-09-20T00:00:00Z', payload: { session_id: 's', hook_event_name: 'PostToolUse', tool_response: { exit_code: 1 } } }, 'failed');
     const succeeded = normalizeCodexHook({ capturedAt: '2026-09-20T00:00:00Z', payload: { session_id: 's', hook_event_name: 'PostToolUse', tool_response: { exit_code: 0 } } }, 'succeeded');

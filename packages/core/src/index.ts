@@ -15,6 +15,7 @@ export interface VeyrEvent {
   agentId?: string;
   toolName?: string;
   callId?: string;
+  skillNames?: string[];
   status: EventStatus;
   occurredAt: string;
   durationMs?: number;
@@ -174,6 +175,8 @@ export function projectTask(events: VeyrEvent[]): TaskSummary[] {
     if (unknown.length) suggestions.push(`${unknown.length} 次工具调用缺少结构化结果；当前仅确认调用完成事件，建议继续采集并等待宿主提供结果字段。`);
     if (!list.length) suggestions.push('本次仅观察到生命周期事件，未观察到可关联的工具调用。');
     if (list.length && !totalEnvelopeMs) suggestions.push('未形成可测调用包络；缺少 PreToolUse 或 PostToolUse 配对证据。');
-    return { sessionId, taskId, observedEvents: ordered.length, calls: list, totalEnvelopeMs, coverage: 'partial', suggestions, mcp: [...buckets.values()], skillEvidence: ['当前 hook-only 路径未观察到可确认的 Skill 请求；这不代表未使用 Skill。'] };
+    const skills = [...new Set(ordered.flatMap((event) => event.skillNames ?? []))];
+    const skillEvidence = skills.length ? skills.map((name) => `观察到显式 Skill 请求：$${name}（仅表示请求，不等于 Skill 已注入或任务已成功）。`) : ['当前 hook-only 路径未观察到可确认的显式 Skill 请求；这不代表未使用 Skill。'];
+    return { sessionId, taskId, observedEvents: ordered.length, calls: list, totalEnvelopeMs, coverage: 'partial', suggestions, mcp: [...buckets.values()], skillEvidence };
   });
 }

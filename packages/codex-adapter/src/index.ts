@@ -208,6 +208,10 @@ export function redactCodexPayload(payload: Record<string, unknown>): Record<str
   }
   const response = safeToolResponse(payload.tool_response);
   if (response) safe.tool_response = response;
+  if (payload.hook_event_name === 'UserPromptSubmit' && typeof payload.prompt === 'string') {
+    const skills = [...payload.prompt.matchAll(/\$([a-zA-Z][a-zA-Z0-9_-]{1,63})\b/g)].map((match) => match[1]!);
+    if (skills.length) safe.skill_names = [...new Set(skills)];
+  }
   return safe;
 }
 export async function writeSpoolItem(directory: string, payload: Record<string, unknown>): Promise<void> {
@@ -225,5 +229,6 @@ export function normalizeCodexHook(item: SpoolItem, sourceId: string): VeyrEvent
     if (exitCode === 0) status = 'succeeded'; else if (typeof exitCode === 'number') status = 'failed';
     if (object.error !== undefined || object.is_error === true) status = 'failed';
   }
-  return { id: `codex-${sourceId}`, host: 'codex', sessionId: text(payload.session_id) ?? 'unknown', taskId: text(payload.turn_id), agentId: undefined, toolName: tool, callId: text(payload.tool_use_id), status, occurredAt: item.capturedAt, contentBytes: Buffer.byteLength(JSON.stringify(payload)), source: hook };
+  const skillNames = Array.isArray(payload.skill_names) ? payload.skill_names.filter((name): name is string => typeof name === 'string') : undefined;
+  return { id: `codex-${sourceId}`, host: 'codex', sessionId: text(payload.session_id) ?? 'unknown', taskId: text(payload.turn_id), agentId: undefined, toolName: tool, callId: text(payload.tool_use_id), skillNames, status, occurredAt: item.capturedAt, contentBytes: Buffer.byteLength(JSON.stringify(payload)), source: hook };
 }

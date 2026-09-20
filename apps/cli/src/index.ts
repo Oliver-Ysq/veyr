@@ -80,10 +80,11 @@ async function openDatabase(): Promise<DatabaseSyncType> {
   const db = new DatabaseSync(dbPath);
   db.exec(`CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY, host TEXT NOT NULL, session_id TEXT NOT NULL, task_id TEXT,
-    agent_id TEXT, tool_name TEXT, call_id TEXT, status TEXT NOT NULL, occurred_at TEXT NOT NULL,
+    agent_id TEXT, tool_name TEXT, call_id TEXT, skill_json TEXT, status TEXT NOT NULL, occurred_at TEXT NOT NULL,
     duration_ms INTEGER, content_bytes INTEGER, message TEXT, source TEXT NOT NULL
   ) STRICT;`);
   try { db.exec('ALTER TABLE events ADD COLUMN call_id TEXT'); } catch { /* Existing database already has the column. */ }
+  try { db.exec('ALTER TABLE events ADD COLUMN skill_json TEXT'); } catch { /* Existing database already has the column. */ }
   return db;
 }
 
@@ -92,11 +93,11 @@ async function importFixture(file: string): Promise<void> {
   const events = raw.split('\n').filter(Boolean).map((line) => parseEvent(JSON.parse(line)));
   const db = await openDatabase();
   const insert = db.prepare(`INSERT OR REPLACE INTO events
-    (id, host, session_id, task_id, agent_id, tool_name, call_id, status, occurred_at, duration_ms, content_bytes, message, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    (id, host, session_id, task_id, agent_id, tool_name, call_id, skill_json, status, occurred_at, duration_ms, content_bytes, message, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   db.exec('BEGIN');
   try {
-    for (const event of events) insert.run(event.id, event.host, event.sessionId, event.taskId ?? null, event.agentId ?? null, event.toolName ?? null, event.callId ?? null, event.status, event.occurredAt, event.durationMs ?? null, event.contentBytes ?? null, event.message ?? null, event.source);
+    for (const event of events) insert.run(event.id, event.host, event.sessionId, event.taskId ?? null, event.agentId ?? null, event.toolName ?? null, event.callId ?? null, event.skillNames ? JSON.stringify(event.skillNames) : null, event.status, event.occurredAt, event.durationMs ?? null, event.contentBytes ?? null, event.message ?? null, event.source);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -109,7 +110,7 @@ function readEvents(db: DatabaseSyncType): VeyrEvent[] {
   return db.prepare('SELECT * FROM events ORDER BY occurred_at ASC').all().map((row) => ({
     id: String(row.id), host: row.host as VeyrEvent['host'], sessionId: String(row.session_id),
     taskId: row.task_id ? String(row.task_id) : undefined, agentId: row.agent_id ? String(row.agent_id) : undefined,
-    toolName: row.tool_name ? String(row.tool_name) : undefined, callId: row.call_id ? String(row.call_id) : undefined, status: row.status as VeyrEvent['status'],
+    toolName: row.tool_name ? String(row.tool_name) : undefined, callId: row.call_id ? String(row.call_id) : undefined, skillNames: row.skill_json ? JSON.parse(String(row.skill_json)) as string[] : undefined, status: row.status as VeyrEvent['status'],
     occurredAt: String(row.occurred_at), durationMs: typeof row.duration_ms === 'number' ? row.duration_ms : undefined,
     contentBytes: typeof row.content_bytes === 'number' ? row.content_bytes : undefined,
     message: row.message ? String(row.message) : undefined, source: String(row.source),
@@ -129,7 +130,7 @@ async function renderReport(language: ReportLanguage = 'zh-CN'): Promise<void> {
     for (const name of await readdir(spool)) {
       const item = JSON.parse(await readFile(join(spool, name), 'utf8')) as { capturedAt: string; payload: Record<string, unknown> };
       const event = normalizeCodexHook(item, name);
-      const db = await openDatabase(); db.prepare('INSERT OR REPLACE INTO events (id,host,session_id,task_id,agent_id,tool_name,call_id,status,occurred_at,duration_ms,content_bytes,message,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').run(event.id,event.host,event.sessionId,event.taskId ?? null,null,event.toolName ?? null,event.callId ?? null,event.status,event.occurredAt,null,event.contentBytes ?? null,null,event.source); db.close();
+      const db = await openDatabase(); db.prepare('INSERT OR REPLACE INTO events (id,host,session_id,task_id,agent_id,tool_name,call_id,skill_json,status,occurred_at,duration_ms,content_bytes,message,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(event.id,event.host,event.sessionId,event.taskId ?? null,null,event.toolName ?? null,event.callId ?? null,event.skillNames ? JSON.stringify(event.skillNames) : null,event.status,event.occurredAt,null,event.contentBytes ?? null,null,event.source); db.close();
       await rm(join(spool, name));
     }
   }
