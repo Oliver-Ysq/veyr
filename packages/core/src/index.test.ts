@@ -13,9 +13,13 @@ describe('core event model', () => {
   it('produces bounded evidence findings', () => {
     const events = [
       parseEvent({ id: 'e1', host: 'fixture', sessionId: 's1', status: 'failed', occurredAt: '2026-09-20T00:00:00.000Z', source: 'test' }),
-      parseEvent({ id: 'e2', host: 'fixture', sessionId: 's1', status: 'unknown', occurredAt: '2026-09-20T00:00:01.000Z', source: 'test' }),
+      parseEvent({ id: 'e2', host: 'fixture', sessionId: 's1', toolName: 'Bash', status: 'unknown', occurredAt: '2026-09-20T00:00:01.000Z', source: 'test' }),
     ];
     expect(deriveFindings(events).map((finding) => finding.id)).toEqual(['failed-calls', 'unknown-outcomes']);
   });
-});
 
+  it('does not treat lifecycle events as missing tool outcomes', () => {
+    const events = [parseEvent({ id: 'e1', host: 'codex', sessionId: 's1', status: 'unknown', occurredAt: '2026-09-20T00:00:00.000Z', source: 'SessionStart' })];
+    expect(deriveFindings(events)).toEqual([]);
+  });
+});

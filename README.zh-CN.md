@@ -1,8 +1,20 @@
-# Veyr
+<h1 align="center">Veyr</h1>
 
-> 面向编程 Agent 的证据优先可观测与诊断工具。
+<p align="center">
+  <strong><em>看穿运行，验证结果。</em></strong>
+</p>
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+<p align="center">
+  面向编程 Agent 的证据优先可观测与诊断工具。
+</p>
+
+<p align="center">
+  <sub>读作 /vɪər/，由 <code>verify</code> 截断而来 —— 看穿，而后校验。</sub>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 Veyr 是一个本地优先的编程 Agent 运行诊断工具。它将结构化事件整理为本地
 SQLite 证据库，并生成方便人阅读的 HTML/JSON 报告。

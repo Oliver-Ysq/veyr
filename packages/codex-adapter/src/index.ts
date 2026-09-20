@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import type { EventStatus, VeyrEvent } from '@veyr/core';
 
 export const MINIMUM_CODEX_VERSION = '0.124.0';
@@ -101,6 +101,36 @@ function tomlTrust(entries: InstallManifest['entries']): string {
   return entries.map((entry) => `[hooks.state.${JSON.stringify(entry.stateKey)}]\ntrusted_hash = ${JSON.stringify(entry.hash)}\n`).join('\n');
 }
 
+interface RuntimeHook { key: string; currentHash: string; command?: string; }
+
+async function runtimeHooksList(cwd: string, codexHome: string): Promise<RuntimeHook[]> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn('codex', ['app-server', '--stdio'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME: codexHome } });
+    let buffer = ''; let initialized = false; let stderr = '';
+    const timer = setTimeout(() => { child.kill(); reject(new Error('Timed out while asking Codex for hook trust state.')); }, 8_000);
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.stdout.on('data', (chunk) => {
+      buffer += String(chunk);
+      for (;;) {
+        const newline = buffer.indexOf('\n'); if (newline === -1) break;
+        const line = buffer.slice(0, newline); buffer = buffer.slice(newline + 1);
+        try {
+          const message = JSON.parse(line) as { id?: number; result?: { data?: Array<{ hooks?: RuntimeHook[] }> } };
+          if (message.id === 1 && !initialized) {
+            initialized = true;
+            child.stdin.write(`${JSON.stringify({ id: 2, method: 'hooks/list', params: { cwds: [cwd] } })}\n`);
+          } else if (message.id === 2) {
+            clearTimeout(timer); child.kill(); resolve(message.result?.data?.flatMap((entry) => entry.hooks ?? []) ?? []);
+          }
+        } catch { /* Ignore non-JSON output. */ }
+      }
+    });
+    child.on('error', (error) => { clearTimeout(timer); reject(error); });
+    child.on('exit', (code) => { if (!initialized) { clearTimeout(timer); reject(new Error(`Codex app-server exited before initialization (${code ?? 'unknown'}): ${stderr}`)); } });
+    child.stdin.write(`${JSON.stringify({ id: 1, method: 'initialize', params: { clientInfo: { name: 'veyr', title: null, version: '0.0.0' }, capabilities: null } })}\n`);
+  });
+}
+
 function removeOwnedTrust(config: string, entries: InstallManifest['entries']): string {
   let next = config;
   for (const entry of entries) {
@@ -110,20 +140,32 @@ function removeOwnedTrust(config: string, entries: InstallManifest['entries']): 
   return next.replace(/\n{3,}/g, '\n\n').replace(/\n?# Veyr-owned Codex hook trust state\n?$/, '').trimEnd() + '\n';
 }
 
-export async function previewInstall(cliPath: string, codexHome = resolveCodexHome()): Promise<{ probe: CodexProbe; manifest?: InstallManifest; hooksBefore: string; hooksAfter?: string; configBefore: string; configAfter?: string }> {
+export async function previewInstall(cliPath: string, codexHome = resolveCodexHome(), commandOverride?: string): Promise<{ probe: CodexProbe; manifest?: InstallManifest; hooksBefore: string; hooksAfter?: string; configBefore: string; configAfter?: string }> {
   const probe = await probeCodex(cliPath, codexHome); const configPath = join(codexHome, 'config.toml'); const hooksBefore = (await exists(probe.hookPath)) ? await readFile(probe.hookPath, 'utf8') : ''; const configBefore = (await exists(configPath)) ? await readFile(configPath, 'utf8') : '';
   if (!probe.eligible || !probe.version) return { probe, hooksBefore, configBefore };
-  const command = `node ${JSON.stringify(cliPath)} shim`; const plan = planInstall(await readHooksFile(probe.hookPath), command, probe.hookPath);
+  const command = commandOverride ?? `node ${JSON.stringify(cliPath)} shim`; const plan = planInstall(await readHooksFile(probe.hookPath), command, probe.hookPath);
   const hooksAfter = `${JSON.stringify(plan.next, null, 2)}\n`; const configAfter = `${removeOwnedTrust(configBefore, plan.entries).trimEnd()}\n\n# Veyr-owned Codex hook trust state\n${tomlTrust(plan.entries)}`;
   const manifest: InstallManifest = { version: 2, codexHome, hookPath: probe.hookPath, configPath, command, entries: plan.entries, installedAt: new Date().toISOString(), codexVersion: probe.version, hooksBefore, hooksAfter, configBefore, configAfter };
   return { probe, manifest, hooksBefore, hooksAfter, configBefore, configAfter };
 }
 
-export async function installHooks(cliPath: string, veyrHome: string, codexHome = resolveCodexHome()): Promise<InstallManifest> {
-  const preview = await previewInstall(cliPath, codexHome); if (!preview.manifest || !preview.hooksAfter || !preview.configAfter) throw new Error(preview.probe.reason ?? 'Codex environment is not ready.');
-  const manifest = preview.manifest;
+export async function installHooks(cliPath: string, veyrHome: string, codexHome = resolveCodexHome(), runtimeResolver: ((cwd: string, home: string) => Promise<RuntimeHook[] | undefined>) = runtimeHooksList): Promise<InstallManifest> {
+  const runtimeCommand = `VEYR_HOME=${JSON.stringify(veyrHome)} ${JSON.stringify(process.execPath)} ${JSON.stringify(cliPath)} shim`;
+  const preview = await previewInstall(cliPath, codexHome, runtimeCommand); if (!preview.manifest || !preview.hooksAfter || !preview.configAfter) throw new Error(preview.probe.reason ?? 'Codex environment is not ready.');
+  let manifest = preview.manifest;
   await atomicWrite(manifest.hookPath, preview.hooksAfter);
-  await atomicWrite(manifest.configPath, preview.configAfter);
+  const runtimeHooks = await runtimeResolver(process.cwd(), codexHome);
+  if (!runtimeHooks) {
+    // Test-only resolver fallback. Production uses runtimeHooksList and fails closed.
+    await atomicWrite(manifest.configPath, manifest.configAfter);
+    await atomicWrite(join(veyrHome, 'codex-install.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    return manifest;
+  }
+  const actual = new Map(runtimeHooks.filter((hook) => hook.command === manifest.command).map((hook) => [hook.key, hook.currentHash]));
+  if (actual.size !== manifest.entries.length) throw new Error(`Codex did not discover all Veyr hooks (${actual.size}/${manifest.entries.length}); installation was not finalized.`);
+  manifest = { ...manifest, entries: manifest.entries.map((entry) => ({ ...entry, hash: actual.get(entry.stateKey) ?? entry.hash })) };
+  manifest = { ...manifest, configAfter: `${removeOwnedTrust(preview.configBefore, manifest.entries).trimEnd()}\n\n# Veyr-owned Codex hook trust state\n${tomlTrust(manifest.entries)}` };
+  await atomicWrite(manifest.configPath, manifest.configAfter);
   await atomicWrite(join(veyrHome, 'codex-install.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
 }

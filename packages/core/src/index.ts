@@ -62,7 +62,7 @@ export function deriveFindings(events: VeyrEvent[]): Finding[] {
       eventIds: failed.map((event) => event.id),
     });
   }
-  const unknown = events.filter((event) => event.status === 'unknown');
+  const unknown = events.filter((event) => event.status === 'unknown' && event.toolName !== undefined);
   if (unknown.length > 0) {
     findings.push({
       id: 'unknown-outcomes',
@@ -84,4 +84,3 @@ export function deriveFindings(events: VeyrEvent[]): Finding[] {
   }
   return findings;
 }
-

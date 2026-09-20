@@ -6,5 +6,6 @@ export default defineConfig({
   dts: true,
   platform: 'node',
   target: 'node22',
+  outExtension: () => ({ js: '.js' }),
   banner: { js: '#!/usr/bin/env node' },
 });

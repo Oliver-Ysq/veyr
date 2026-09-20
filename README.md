@@ -1,8 +1,20 @@
-# Veyr
+<h1 align="center">Veyr</h1>
 
-> Evidence-first observability for coding agents.
+<p align="center">
+  <strong><em>See through the run. Verify the result.</em></strong>
+</p>
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+<p align="center">
+  Evidence-first observability for coding agents.
+</p>
+
+<p align="center">
+  <sub>/vɪər/ &nbsp;·&nbsp; a clipped <code>verify</code> — see through, then check</sub>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 Veyr is a local-first diagnostic tool for coding-agent runs. It turns structured
 events into a local SQLite evidence store and human-readable HTML/JSON reports.

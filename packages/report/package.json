@@ -8,9 +8,8 @@
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "dependencies": { "@veyr/core": "workspace:*" },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "tsup",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit"
   }
 }
-

@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline/promises';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite';
@@ -10,7 +11,7 @@ import { installHooks, normalizeCodexHook, previewInstall, probeCodex, uninstall
 
 const workspaceRoot = resolve(dirname(new URL(import.meta.url).pathname), '../../..');
 const cliPath = fileURLToPath(import.meta.url);
-const stateRoot = resolve(process.env.VEYR_HOME ?? join(process.cwd(), '.veyr'));
+const stateRoot = resolve(process.env.VEYR_HOME ?? join(homedir(), '.veyr'));
 const dbPath = join(stateRoot, 'veyr.db');
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: new (path: string) => DatabaseSyncType };
@@ -42,7 +43,8 @@ function shortDiff(before: string, after: string): string {
 }
 
 async function install(assumeYes: boolean): Promise<void> {
-  const preview = await previewInstall(cliPath);
+  const runtimeCommand = `VEYR_HOME=${JSON.stringify(stateRoot)} ${JSON.stringify(process.execPath)} ${JSON.stringify(cliPath)} shim`;
+  const preview = await previewInstall(cliPath, undefined, runtimeCommand);
   if (!preview.manifest || !preview.hooksAfter || !preview.configAfter) throw new Error(preview.probe.reason ?? 'Codex environment is not ready.');
   console.log(`Veyr will enable experimental local Codex collection.\n\nCollected by default:\n  - event type, session/turn/call IDs, timestamps, tool name, outcome summaries\nNot collected by default:\n  - prompts, code, command arguments, full tool output, transcript paths\n\nFiles to change:\n  + ${preview.manifest.hookPath}\n  + ${preview.manifest.configPath}\n  + ${join(stateRoot, 'codex-install.json')}\n\nHook changes:\n${shortDiff(preview.hooksBefore, preview.hooksAfter)}\n\nTrust changes:\n${shortDiff(preview.configBefore, preview.configAfter)}`);
   if (!assumeYes) {
