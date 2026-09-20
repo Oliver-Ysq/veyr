@@ -1,0 +1,4 @@
+{"id":"mcp-pre-1","host":"fixture","sessionId":"mcp-session","taskId":"mcp-turn","toolName":"mcp__filesystem__read_file","callId":"mcp-call-1","status":"requested","occurredAt":"2026-09-20T10:00:00.000Z","source":"PreToolUse"}
+{"id":"mcp-post-1","host":"fixture","sessionId":"mcp-session","taskId":"mcp-turn","toolName":"mcp__filesystem__read_file","callId":"mcp-call-1","status":"succeeded","occurredAt":"2026-09-20T10:00:00.125Z","source":"PostToolUse"}
+{"id":"mcp-pre-2","host":"fixture","sessionId":"mcp-session","taskId":"mcp-turn","toolName":"mcp__figma__get_design_context","callId":"mcp-call-2","status":"requested","occurredAt":"2026-09-20T10:00:01.000Z","source":"PreToolUse"}
+{"id":"mcp-post-2","host":"fixture","sessionId":"mcp-session","taskId":"mcp-turn","toolName":"mcp__figma__get_design_context","callId":"mcp-call-2","status":"unknown","occurredAt":"2026-09-20T10:00:01.480Z","source":"PostToolUse"}

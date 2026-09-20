@@ -69,6 +69,13 @@ pnpm veyr import fixtures/demo-events.jsonl
 pnpm veyr report
 ```
 
+如需在不连接真实 MCP 服务的情况下预览 MCP 聚合报告：
+
+```bash
+pnpm veyr import fixtures/mcp-events.jsonl
+pnpm veyr report
+```
+
 ## 实验性 Codex 实时采集
 
 当 Codex CLI 版本不低于 `0.124.0` 时，Veyr 可以安装实验性的用户级 Codex

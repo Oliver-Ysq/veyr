@@ -72,6 +72,13 @@ pnpm veyr import fixtures/demo-events.jsonl
 pnpm veyr report
 ```
 
+To preview MCP aggregation without connecting to a live MCP server:
+
+```bash
+pnpm veyr import fixtures/mcp-events.jsonl
+pnpm veyr report
+```
+
 ## Experimental Codex collection
 
 Veyr can install experimental, user-level Codex collection when Codex CLI is
