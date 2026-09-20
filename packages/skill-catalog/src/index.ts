@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { SkillCatalogEntry, SkillRuntimeObservation } from '@veyr/core';
+import type { CompactionEvent, NativeTokenUsage, SessionTelemetry, SkillCatalogEntry, SkillRuntimeObservation } from '@veyr/core';
 
 type Root = { source: SkillCatalogEntry['source']; path: string };
 
@@ -37,6 +37,49 @@ export async function scanSkills(projectRoot: string): Promise<SkillCatalogEntry
 type RolloutLine = { timestamp?: string; type?: string; payload?: Record<string, unknown> };
 
 function asNumber(value: unknown): number { return typeof value === 'number' ? value : 0; }
+function optionalNumber(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) ? value : undefined; }
+function object(value: unknown): Record<string, unknown> | undefined { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
+function usage(value: unknown): NativeTokenUsage | undefined {
+  const item = object(value); if (!item) return undefined;
+  const inputTokens = optionalNumber(item.input_tokens); const outputTokens = optionalNumber(item.output_tokens);
+  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  return { inputTokens: inputTokens ?? 0, cacheReadTokens: asNumber(item.cached_input_tokens), cacheWriteTokens: asNumber(item.cache_write_input_tokens), outputTokens: outputTokens ?? 0, totalTokens: optionalNumber(item.total_tokens) ?? (inputTokens ?? 0) + (outputTokens ?? 0) };
+}
+
+export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoot = join(homedir(), '.codex', 'sessions')): Promise<SessionTelemetry[]> {
+  const bySession = new Map<string, SessionTelemetry>(sessionIds.map((sessionId) => [sessionId, { sessionId, usageSnapshots: [], compactions: [], flow: [], inspectedRollout: false }]));
+  async function visit(directory: string): Promise<void> {
+    let children; try { children = await readdir(directory, { withFileTypes: true }); } catch { return; }
+    for (const child of children) {
+      const path = join(directory, child.name);
+      if (child.isDirectory()) { await visit(path); continue; }
+      const sessionId = sessionIds.find((id) => child.name.includes(id));
+      if (!sessionId || !child.name.endsWith('.jsonl')) continue;
+      const telemetry = bySession.get(sessionId)!; telemetry.inspectedRollout = true;
+      for (const line of (await readFile(path, 'utf8')).split('\n').filter(Boolean)) {
+        let record: RolloutLine; try { record = JSON.parse(line) as RolloutLine; } catch { continue; }
+        const payload = record.payload ?? {}; const occurredAt = record.timestamp ?? '';
+        if (record.type === 'event_msg') {
+          const limit = optionalNumber(payload.model_context_window) ?? optionalNumber(object(payload.info)?.model_context_window);
+          if (limit !== undefined) telemetry.contextWindowTokens = limit;
+          const snapshot = usage(object(payload.info)?.last_token_usage) ?? usage(payload.usage);
+          if (snapshot && occurredAt) telemetry.usageSnapshots.push({ occurredAt, turnId: typeof payload.turn_id === 'string' ? payload.turn_id : undefined, usage: snapshot });
+          if (payload.type === 'task_started' && occurredAt) telemetry.flow.push({ occurredAt, kind: 'turn_started', label: 'Turn started', source: 'native_rollout', turnId: typeof payload.turn_id === 'string' ? payload.turn_id : undefined });
+        }
+        if (record.type === 'token_usage_record') {
+          const snapshot = usage(payload.usage); if (snapshot && occurredAt) telemetry.usageSnapshots.push({ occurredAt, turnId: typeof payload.turn_id === 'string' ? payload.turn_id : undefined, usage: snapshot });
+        }
+        if (record.type === 'compacted' && occurredAt) {
+          const event: CompactionEvent = { occurredAt, windowNumber: optionalNumber(payload.window_number), windowId: typeof payload.window_id === 'string' ? payload.window_id : undefined, previousWindowId: typeof payload.previous_window_id === 'string' ? payload.previous_window_id : undefined, source: 'native_rollout' };
+          telemetry.compactions.push(event);
+          telemetry.flow.push({ occurredAt, kind: 'compacted', label: 'Context compacted', source: 'native_rollout', detail: event.windowNumber === undefined ? undefined : `Window ${event.windowNumber}` });
+        }
+      }
+    }
+  }
+  await visit(rolloutRoot);
+  return [...bySession.values()].map((telemetry) => ({ ...telemetry, usageSnapshots: telemetry.usageSnapshots.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), compactions: telemetry.compactions.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), flow: telemetry.flow.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)) }));
+}
 
 export async function scanCodexSkillRuntime(sessionIds: string[]): Promise<SkillRuntimeObservation[]> {
   const home = join(homedir(), '.codex', 'sessions');

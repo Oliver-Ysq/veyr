@@ -32,7 +32,7 @@ describe('HTML report languages', () => {
     expect(html).toContain('370 ms');
     expect(html).toContain('filesystem');
     expect(html).toContain('brainstorming');
-    expect(html).toContain('工具调用时间线');
+    expect(html).toContain('Tool 分析');
   });
 
   it('uses one visible summary for the newest session and collapses historical sessions', () => {
@@ -42,6 +42,17 @@ describe('HTML report languages', () => {
     expect(html).toContain('历史会话（1 会话）');
     expect(html).toContain('<code>older</code> · 1 个观测 turn');
     expect(html.indexOf('<code>newer</code>')).toBeLessThan(html.indexOf('<code>older</code>'));
+  });
+
+  it('renders context telemetry and explicitly degrades when native fields are unavailable', () => {
+    const task = { sessionId: 's1', taskId: 't1', lastObservedAt: '2026-09-20T00:00:02.000Z', observedEvents: 1, totalEnvelopeMs: 0, terminalObserved: false, coverage: 'partial' as const, suggestions: [], skillEvidence: [], calls: [], mcp: [] };
+    const full = renderHtmlReport({ ...report, tasks: [task], telemetry: [{ sessionId: 's1', contextWindowTokens: 128000, inspectedRollout: true, usageSnapshots: [{ occurredAt: '2026-09-20T00:00:01.000Z', usage: { inputTokens: 1000, cacheReadTokens: 800, cacheWriteTokens: 10, outputTokens: 50, totalTokens: 1050 } }], compactions: [{ occurredAt: '2026-09-20T00:00:02.000Z', windowNumber: 2, source: 'native_rollout' }], flow: [{ occurredAt: '2026-09-20T00:00:02.000Z', kind: 'compacted', label: 'Context compacted', source: 'native_rollout' }] }] });
+    expect(full).toContain('128,000 tokens');
+    expect(full).toContain('压缩：1 次');
+    expect(full).toContain('Context compacted');
+    const degraded = renderHtmlReport({ ...report, tasks: [task], telemetry: [{ sessionId: 's1', inspectedRollout: false, usageSnapshots: [], compactions: [], flow: [] }] });
+    expect(degraded).toContain('本次会话未提供原生上下文窗口上限。');
+    expect(degraded).toContain('未观察到原生 compaction 记录；这不证明没有发生压缩。');
   });
 
   it('renders Skill Doctor static cost and unobserved candidates in the main report', () => {

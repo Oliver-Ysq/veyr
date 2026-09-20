@@ -79,6 +79,46 @@ export interface SessionSummary {
   suggestions: string[];
 }
 
+export interface NativeTokenUsage {
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface UsageSnapshot {
+  occurredAt: string;
+  turnId?: string;
+  usage: NativeTokenUsage;
+}
+
+export interface CompactionEvent {
+  occurredAt: string;
+  windowNumber?: number;
+  windowId?: string;
+  previousWindowId?: string;
+  source: 'native_rollout';
+}
+
+export type SessionFlowEvent = {
+  occurredAt: string;
+  kind: 'turn_started' | 'skill_injected' | 'tool_started' | 'tool_completed' | 'compacted' | 'turn_ended';
+  label: string;
+  source: 'hook' | 'native_rollout';
+  turnId?: string;
+  detail?: string;
+};
+
+export interface SessionTelemetry {
+  sessionId: string;
+  contextWindowTokens?: number;
+  usageSnapshots: UsageSnapshot[];
+  compactions: CompactionEvent[];
+  flow: SessionFlowEvent[];
+  inspectedRollout: boolean;
+}
+
 export interface SkillCatalogEntry {
   name: string;
   source: 'project' | 'user-agents' | 'user-codex';
