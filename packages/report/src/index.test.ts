@@ -33,6 +33,8 @@ describe('HTML report languages', () => {
     expect(html).toContain('filesystem');
     expect(html).toContain('brainstorming');
     expect(html).toContain('Tool 分析');
+    expect(html).toContain('class="pixi-flow-canvas"');
+    expect(html).toContain('assets/pixi.min.js');
   });
 
   it('renders a selectable session sidebar and defaults to the newest session', () => {

@@ -107,6 +107,18 @@ export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoo
             }
           }
         }
+        if (record.type === 'response_item' && payload.type === 'message' && occurredAt) {
+          const message = payload; const metadata = object(message.internal_chat_message_metadata_passthrough);
+          const turnId = typeof metadata?.turn_id === 'string' ? metadata.turn_id : undefined;
+          const content = Array.isArray(message.content) ? message.content : [];
+          for (const item of content) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+            const text = (item as Record<string, unknown>).text;
+            if (typeof text !== 'string') continue;
+            const match = /<skill>\s*<name>([^<]+)<\/name>[\s\S]*?<path>([^<]+\/SKILL\.md)<\/path>[\s\S]*?<\/skill>/.exec(text);
+            if (match) telemetry.flow.push({ occurredAt, kind: 'skill_injected', label: `Skill: ${match[1]!.trim()}`, source: 'native_rollout', turnId, detail: 'observed injection' });
+          }
+        }
         if (record.type === 'event_msg') {
           const limit = optionalNumber(payload.model_context_window) ?? optionalNumber(object(payload.info)?.model_context_window);
           if (limit !== undefined) telemetry.contextWindowTokens = limit;

@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline/promises';
 import { homedir } from 'node:os';
@@ -148,6 +148,9 @@ async function renderReport(language: ReportLanguage = 'zh-CN'): Promise<void> {
   const report = { generatedAt: new Date().toISOString(), events, findings: deriveFindings(events), tasks, telemetry: await scanCodexSessionTelemetry(codexSessionIds), skillDoctor: buildSkillDoctor(await scanSkills(process.cwd()), events, await scanCodexSkillRuntime(codexSessionIds)) };
   const reportDirectory = join(stateRoot, 'reports');
   await mkdir(reportDirectory, { recursive: true });
+  const assetDirectory = join(reportDirectory, 'assets');
+  await mkdir(assetDirectory, { recursive: true });
+  await copyFile(join(workspaceRoot, 'packages', 'report', 'node_modules', 'pixi.js', 'dist', 'pixi.min.js'), join(assetDirectory, 'pixi.min.js'));
   await Promise.all([
     writeFile(join(reportDirectory, 'latest.json'), `${JSON.stringify(report, null, 2)}\n`),
     writeFile(join(reportDirectory, 'latest.html'), renderHtmlReport(report, language)),
