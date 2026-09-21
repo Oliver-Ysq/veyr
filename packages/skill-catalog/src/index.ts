@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { CompactionEvent, ConversationTurn, NativeTokenUsage, SessionTelemetry, SkillCatalogEntry, SkillRuntimeObservation } from '@veyr/core';
@@ -35,6 +36,7 @@ export async function scanSkills(projectRoot: string): Promise<SkillCatalogEntry
 }
 
 type RolloutLine = { timestamp?: string; type?: string; payload?: Record<string, unknown> };
+const require = createRequire(import.meta.url);
 
 function asNumber(value: unknown): number { return typeof value === 'number' ? value : 0; }
 function optionalNumber(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) ? value : undefined; }
@@ -45,12 +47,36 @@ function usage(value: unknown): NativeTokenUsage | undefined {
   if (inputTokens === undefined && outputTokens === undefined) return undefined;
   return { inputTokens: inputTokens ?? 0, cacheReadTokens: asNumber(item.cached_input_tokens), cacheWriteTokens: asNumber(item.cache_write_input_tokens), outputTokens: outputTokens ?? 0, totalTokens: optionalNumber(item.total_tokens) ?? (inputTokens ?? 0) + (outputTokens ?? 0) };
 }
+function userText(text: string): string {
+  if (!text.startsWith('The following is the Codex agent history')) return text;
+  const blocks = [...text.matchAll(/\[\d+\]\s+user:\s*([\s\S]*?)(?=\n\[\d+\]\s+(?:user|assistant|tool)|\n>>> TRANSCRIPT END)/g)].map((match) => match[1] ?? '');
+  return blocks.reverse().find((block) => /(?:## My request:|\S)/.test(block) && !/^\s*<in-app-browser-context/.test(block)) ?? '';
+}
 function summary(text: string): { title: string; promptPreview: string } | undefined {
-  const compact = text.replace(/\s+/g, ' ').trim();
+  const cleaned = userText(text).replace(/<in-app-browser-context[\s\S]*?<\/in-app-browser-context>/g, '').replace(/# Files mentioned by the user:[\s\S]*?(?=## My request:|$)/g, '');
+  const compact = cleaned.replace(/\s+/g, ' ').trim().replace(/^## My request:\s*/, '');
   if (!compact || compact.startsWith('<') || compact.startsWith('The following is the Codex agent history')) return undefined;
   const firstSentence = compact.split(/[。！？!?]/, 1)[0] ?? compact;
   const title = firstSentence.slice(0, 56).replace(/[，。；：、,.!！?？]+$/, '') || '未命名请求';
   return { title, promptPreview: title };
+}
+function titleFromThreadHistory(sessionIds: string[]): Map<string, string> {
+  const titles = new Map<string, string>();
+  try {
+    const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => { prepare(query: string): { all(...values: unknown[]): Array<{ item_json: string }> }; close(): void } };
+    const db = new DatabaseSync(join(homedir(), '.codex', 'thread_history_1.sqlite'), { readOnly: true });
+    const statement = db.prepare("SELECT item_json FROM thread_items WHERE thread_id = ? AND item_type = 'userMessage' ORDER BY rollout_ordinal ASC");
+    for (const sessionId of sessionIds) {
+      for (const row of statement.all(sessionId)) {
+        let item: { content?: Array<{ type?: unknown; text?: unknown }> }; try { item = JSON.parse(row.item_json) as typeof item; } catch { continue; }
+        const text = item.content?.find((part) => part.type === 'text' && typeof part.text === 'string')?.text;
+        const candidate = typeof text === 'string' ? summary(text) : undefined;
+        if (candidate && candidate.title.length > 2 && !/^(ok|好的|收到)$/i.test(candidate.title)) { titles.set(sessionId, candidate.title); break; }
+      }
+    }
+    db.close();
+  } catch { /* Older Codex versions or locked/missing history databases fall back safely. */ }
+  return titles;
 }
 
 export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoot = join(homedir(), '.codex', 'sessions')): Promise<SessionTelemetry[]> {
@@ -100,6 +126,7 @@ export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoo
     }
   }
   await visit(rolloutRoot);
+  const historyTitles = titleFromThreadHistory(sessionIds);
   const titles = new Map<string, string>();
   try {
     for (const line of (await readFile(join(homedir(), '.codex', 'session_index.jsonl'), 'utf8')).split('\n').filter(Boolean)) {
@@ -109,7 +136,7 @@ export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoo
       } catch { /* A partial append must not discard other valid index entries. */ }
     }
   } catch { /* The index is optional across Codex versions. */ }
-  for (const telemetry of bySession.values()) telemetry.sessionTitle = titles.get(telemetry.sessionId);
+  for (const telemetry of bySession.values()) telemetry.sessionTitle = historyTitles.get(telemetry.sessionId) ?? titles.get(telemetry.sessionId);
   return [...bySession.values()].map((telemetry) => ({ ...telemetry, usageSnapshots: telemetry.usageSnapshots.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), compactions: telemetry.compactions.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), flow: telemetry.flow.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), conversationTurns: telemetry.conversationTurns.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)) }));
 }
 

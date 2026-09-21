@@ -35,4 +35,12 @@ describe('skill catalog', () => {
     const [telemetry] = await scanCodexSessionTelemetry([sessionId], root);
     expect(telemetry!.conversationTurns).toEqual([{ turnId: 'turn-1', occurredAt: '2026-09-20T00:00:00.000Z', title: '请分析这个项目的工具调用链路，并给我一个简短标题', promptPreview: '请分析这个项目的工具调用链路，并给我一个简短标题' }]);
   });
+
+  it('extracts the last real user request from a Codex history wrapper', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'veyr-history-wrapper-')); const sessionId = 'session-history';
+    const wrapped = 'The following is the Codex agent history whose request action you are assessing.\n>>> TRANSCRIPT START\n[1] user: \n<in-app-browser-context source="ambient-ui-state">ignore</in-app-browser-context>\n[2] user: \n## My request:\n请优化报告的会话标题，不要展示 UUID。\n>>> TRANSCRIPT END';
+    await writeFile(join(root, `rollout-${sessionId}.jsonl`), JSON.stringify({ timestamp: '2026-09-20T00:00:00.000Z', type: 'response_item', payload: { type: 'message', role: 'user', internal_chat_message_metadata_passthrough: { turn_id: 'turn-1', content_item_kinds: ['user.text'] }, content: [{ type: 'input_text', text: wrapped }] } }));
+    const [telemetry] = await scanCodexSessionTelemetry([sessionId], root);
+    expect(telemetry!.conversationTurns[0]).toMatchObject({ title: '请优化报告的会话标题，不要展示 UUID' });
+  });
 });
