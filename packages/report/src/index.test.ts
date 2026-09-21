@@ -35,13 +35,15 @@ describe('HTML report languages', () => {
     expect(html).toContain('Tool 分析');
   });
 
-  it('uses one visible summary for the newest session and collapses historical sessions', () => {
+  it('renders a selectable session sidebar and defaults to the newest session', () => {
     const task = (sessionId: string, taskId: string, lastObservedAt: string) => ({ sessionId, taskId, lastObservedAt, observedEvents: 1, totalEnvelopeMs: 0, terminalObserved: false, coverage: 'partial' as const, suggestions: [], skillEvidence: [], calls: [], mcp: [] });
     const html = renderHtmlReport({ ...report, tasks: [task('older', 't1', '2026-09-20T00:00:00.000Z'), task('newer', 't1', '2026-09-20T00:00:02.000Z'), task('newer', 't2', '2026-09-20T00:00:01.000Z')] });
-    expect(html.match(/<h2>本次摘要<\/h2>/g)).toHaveLength(1);
-    expect(html).toContain('历史会话（1 会话）');
-    expect(html).toContain('<code>older</code> · 1 个观测 turn');
-    expect(html.indexOf('<code>newer</code>')).toBeLessThan(html.indexOf('<code>older</code>'));
+    expect(html).toContain('会话（2）');
+    expect(html).toContain('data-session-target="session-0"');
+    expect(html).toContain('data-session-target="session-1"');
+    expect(html).toContain('id="session-0" class="session-panel" data-session-panel >');
+    expect(html).toContain('id="session-1" class="session-panel" data-session-panel hidden>');
+    expect(html.indexOf('newer')).toBeLessThan(html.indexOf('older'));
   });
 
   it('renders context telemetry and explicitly degrades when native fields are unavailable', () => {
