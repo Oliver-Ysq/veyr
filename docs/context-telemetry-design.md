@@ -41,8 +41,10 @@ metadata:
 - numeric context-window limits and numeric usage counters;
 - compaction count and timing;
 - already-supported Skill name/path metadata.
+- an existing Codex `thread_name` when provided by the local session index, or
+  otherwise a locally derived first-sentence title capped at 56 characters.
 
-It does not persist prompt text, source code, model reasoning, tool input,
+It does not persist full prompt text, source code, model reasoning, tool input,
 tool-output bodies, compaction summaries, or `replacement_history` contents.
 
 ## Data model

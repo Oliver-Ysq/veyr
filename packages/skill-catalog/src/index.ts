@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { CompactionEvent, NativeTokenUsage, SessionTelemetry, SkillCatalogEntry, SkillRuntimeObservation } from '@veyr/core';
+import type { CompactionEvent, ConversationTurn, NativeTokenUsage, SessionTelemetry, SkillCatalogEntry, SkillRuntimeObservation } from '@veyr/core';
 
 type Root = { source: SkillCatalogEntry['source']; path: string };
 
@@ -45,9 +45,16 @@ function usage(value: unknown): NativeTokenUsage | undefined {
   if (inputTokens === undefined && outputTokens === undefined) return undefined;
   return { inputTokens: inputTokens ?? 0, cacheReadTokens: asNumber(item.cached_input_tokens), cacheWriteTokens: asNumber(item.cache_write_input_tokens), outputTokens: outputTokens ?? 0, totalTokens: optionalNumber(item.total_tokens) ?? (inputTokens ?? 0) + (outputTokens ?? 0) };
 }
+function summary(text: string): { title: string; promptPreview: string } | undefined {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (!compact || compact.startsWith('<') || compact.startsWith('The following is the Codex agent history')) return undefined;
+  const firstSentence = compact.split(/[。！？!?]/, 1)[0] ?? compact;
+  const title = firstSentence.slice(0, 56).replace(/[，。；：、,.!！?？]+$/, '') || '未命名请求';
+  return { title, promptPreview: title };
+}
 
 export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoot = join(homedir(), '.codex', 'sessions')): Promise<SessionTelemetry[]> {
-  const bySession = new Map<string, SessionTelemetry>(sessionIds.map((sessionId) => [sessionId, { sessionId, usageSnapshots: [], compactions: [], flow: [], inspectedRollout: false }]));
+  const bySession = new Map<string, SessionTelemetry>(sessionIds.map((sessionId) => [sessionId, { sessionId, usageSnapshots: [], compactions: [], flow: [], inspectedRollout: false, conversationTurns: [] }]));
   async function visit(directory: string): Promise<void> {
     let children; try { children = await readdir(directory, { withFileTypes: true }); } catch { return; }
     for (const child of children) {
@@ -59,6 +66,21 @@ export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoo
       for (const line of (await readFile(path, 'utf8')).split('\n').filter(Boolean)) {
         let record: RolloutLine; try { record = JSON.parse(line) as RolloutLine; } catch { continue; }
         const payload = record.payload ?? {}; const occurredAt = record.timestamp ?? '';
+        if (record.type === 'response_item' && payload.type === 'message' && payload.role === 'user' && occurredAt) {
+          const metadata = object(payload.internal_chat_message_metadata_passthrough);
+          const kinds = Array.isArray(metadata?.content_item_kinds) ? metadata!.content_item_kinds : [];
+          const content = Array.isArray(payload.content) ? payload.content : [];
+          const texts = content.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)).filter((item) => item.type === 'input_text' && typeof item.text === 'string').map((item) => item.text as string);
+          if (kinds.includes('user.text')) {
+            const candidate = [...texts].reverse().map(summary).find((item): item is { title: string; promptPreview: string } => item !== undefined);
+            if (candidate) {
+              const turnId = typeof metadata?.turn_id === 'string' ? metadata.turn_id : undefined;
+              const item: ConversationTurn = { turnId, occurredAt, ...candidate };
+              telemetry.conversationTurns.push(item);
+              telemetry.flow.push({ occurredAt, kind: 'turn_started', label: `User: ${candidate.title}`, source: 'native_rollout', turnId });
+            }
+          }
+        }
         if (record.type === 'event_msg') {
           const limit = optionalNumber(payload.model_context_window) ?? optionalNumber(object(payload.info)?.model_context_window);
           if (limit !== undefined) telemetry.contextWindowTokens = limit;
@@ -78,7 +100,17 @@ export async function scanCodexSessionTelemetry(sessionIds: string[], rolloutRoo
     }
   }
   await visit(rolloutRoot);
-  return [...bySession.values()].map((telemetry) => ({ ...telemetry, usageSnapshots: telemetry.usageSnapshots.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), compactions: telemetry.compactions.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), flow: telemetry.flow.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)) }));
+  const titles = new Map<string, string>();
+  try {
+    for (const line of (await readFile(join(homedir(), '.codex', 'session_index.jsonl'), 'utf8')).split('\n').filter(Boolean)) {
+      try {
+        const item = JSON.parse(line) as { id?: unknown; thread_name?: unknown };
+        if (typeof item.id === 'string' && typeof item.thread_name === 'string' && item.thread_name.trim()) titles.set(item.id, item.thread_name.trim().slice(0, 56));
+      } catch { /* A partial append must not discard other valid index entries. */ }
+    }
+  } catch { /* The index is optional across Codex versions. */ }
+  for (const telemetry of bySession.values()) telemetry.sessionTitle = titles.get(telemetry.sessionId);
+  return [...bySession.values()].map((telemetry) => ({ ...telemetry, usageSnapshots: telemetry.usageSnapshots.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), compactions: telemetry.compactions.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), flow: telemetry.flow.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), conversationTurns: telemetry.conversationTurns.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)) }));
 }
 
 export async function scanCodexSkillRuntime(sessionIds: string[]): Promise<SkillRuntimeObservation[]> {

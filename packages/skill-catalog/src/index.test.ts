@@ -23,6 +23,16 @@ describe('skill catalog', () => {
     const [telemetry, hookOnly] = await scanCodexSessionTelemetry([sessionId, 'hook-only'], root);
     expect(telemetry).toMatchObject({ sessionId, contextWindowTokens: 128000, inspectedRollout: true, usageSnapshots: [{ usage: { inputTokens: 1000, cacheReadTokens: 800, outputTokens: 50 } }], compactions: [{ windowNumber: 2, windowId: 'new-window' }] });
     expect(JSON.stringify(telemetry)).not.toContain('replacement_history');
-    expect(hookOnly).toMatchObject({ sessionId: 'hook-only', inspectedRollout: false, usageSnapshots: [], compactions: [] });
+    expect(hookOnly).toMatchObject({ sessionId: 'hook-only', inspectedRollout: false, usageSnapshots: [], compactions: [], conversationTurns: [] });
+  });
+
+  it('keeps only bounded user-message summaries for conversation navigation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'veyr-conversation-')); const sessionId = 'session-conversation';
+    await writeFile(join(root, `rollout-${sessionId}.jsonl`), [
+      JSON.stringify({ timestamp: '2026-09-20T00:00:00.000Z', type: 'response_item', payload: { type: 'message', role: 'user', internal_chat_message_metadata_passthrough: { turn_id: 'turn-1', content_item_kinds: ['user.text'] }, content: [{ type: 'input_text', text: '请分析这个项目的工具调用链路，并给我一个简短标题。这里是不应完整保存的额外内容。' }] } }),
+      JSON.stringify({ timestamp: '2026-09-20T00:00:01.000Z', type: 'response_item', payload: { type: 'message', role: 'user', internal_chat_message_metadata_passthrough: { turn_id: 'turn-2', content_item_kinds: ['environments.environment_context'] }, content: [{ type: 'input_text', text: '<environment_context>ignore</environment_context>' }] } }),
+    ].join('\n'));
+    const [telemetry] = await scanCodexSessionTelemetry([sessionId], root);
+    expect(telemetry!.conversationTurns).toEqual([{ turnId: 'turn-1', occurredAt: '2026-09-20T00:00:00.000Z', title: '请分析这个项目的工具调用链路，并给我一个简短标题', promptPreview: '请分析这个项目的工具调用链路，并给我一个简短标题' }]);
   });
 });

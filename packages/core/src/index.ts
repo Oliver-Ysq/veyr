@@ -112,11 +112,21 @@ export type SessionFlowEvent = {
 
 export interface SessionTelemetry {
   sessionId: string;
+  sessionTitle?: string;
   contextWindowTokens?: number;
   usageSnapshots: UsageSnapshot[];
   compactions: CompactionEvent[];
   flow: SessionFlowEvent[];
   inspectedRollout: boolean;
+  /** Locally derived, bounded summaries of user-authored messages. */
+  conversationTurns: ConversationTurn[];
+}
+
+export interface ConversationTurn {
+  turnId?: string;
+  occurredAt: string;
+  title: string;
+  promptPreview: string;
 }
 
 export interface SkillCatalogEntry {
